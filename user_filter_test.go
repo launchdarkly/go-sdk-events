@@ -4,8 +4,9 @@ import (
 	"sort"
 	"testing"
 
-	helpers "github.com/launchdarkly/go-test-helpers"
 	"github.com/stretchr/testify/assert"
+
+	helpers "github.com/launchdarkly/go-test-helpers"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
