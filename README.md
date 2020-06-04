@@ -2,6 +2,10 @@
 
 [![Circle CI](https://circleci.com/gh/launchdarkly/go-sdk-events.svg?style=svg)](https://circleci.com/gh/launchdarkly/go-sdk-events)
 
+## This is a prerelease repository
+
+This project currently contains prerelease code to support development of Go SDK 5.0.0.
+
 ## Overview
 
 This repository contains the analytics event logic and event data model used by the [LaunchDarkly Go SDK](https://github.com/launchdarkly/go-server-sdk). It is packaged separately because it is also used by internal LaunchDarkly components. Applications using the LaunchDarkly Go SDK should not need to reference this package directly.
