@@ -31,21 +31,20 @@ jobs:
         environment:
           CIRCLE_TEST_REPORTS: /tmp/circle-reports
           CIRCLE_ARTIFACTS: /tmp/circle-artifacts
-          COMMON_GO_PACKAGES: >
-            github.com/golang/dep/cmd/dep
-            github.com/jstemmer/go-junit-report
-
-    working_directory: /go/src/gopkg.in/launchdarkly/go-sdk-events.v1
 
     steps:
       - checkout
-      - run: go get -u $COMMON_GO_PACKAGES
+
+      - run:
+          name: install go-junit-report
+          command: go get -u github.com/jstemmer/go-junit-report
+
+      - run: go build ./...
+
       - when:
           condition: <<parameters.run-lint>>
           steps:
             - run: make lint
-      - run: go get -t ./...
-      - run: go build ./...
       
       - run:
           name: Run tests
@@ -68,20 +67,11 @@ jobs:
 
     environment:
       GOPATH: C:\Users\VssAdministrator\go
-      PACKAGE_PATH: gopkg.in\launchdarkly\go-sdk-events.v1
 
     steps:
       - checkout
       - run: go version
       - run:
-          name: move source
-          command: |
-            go env GOPATH
-            mkdir ${env:GOPATH}\src\${env:PACKAGE_PATH}
-            mv * ${env:GOPATH}\src\${env:PACKAGE_PATH}\
-      - run:
           name: build and test
           command: |
-            cd ${env:GOPATH}\src\${env:PACKAGE_PATH}
-            go get -t ./...
             go test -race ./...
