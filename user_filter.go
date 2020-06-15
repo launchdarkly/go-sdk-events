@@ -132,7 +132,7 @@ func (uf *userFilter) scrubUser(user EventUser) (ret *serializableUser) {
 		// Such a concurrent modification shouldn't be possible since the map is not exposed outside of
 		// the ldvalue package, but better safe than sorry.
 		defer func() {
-			if r := recover(); r != nil {
+			if r := recover(); r != nil { // COVERAGE: no way to simulate this condition in unit tests
 				uf.loggers.Errorf(userSerializationErrorMessage, describeUserForErrorLog(user.GetKey(), uf.logUserKeyInErrors), r)
 				ret.filteredUser.Custom = nil
 			}
@@ -155,20 +155,23 @@ func (uf *userFilter) scrubUser(user EventUser) (ret *serializableUser) {
 
 func (u serializableUser) MarshalJSON() (output []byte, err error) {
 	marshalUserWithoutCustomAttrs := func(err interface{}) ([]byte, error) {
+		// COVERAGE: no way to simulate this condition in unit tests
 		if me, ok := err.(*json.MarshalerError); ok {
-			err = me.Err
+			err = me.Err // COVERAGE: no way to simulate this condition in unit tests
 		}
 		u.filter.loggers.Errorf(
 			userSerializationErrorMessage,
 			describeUserForErrorLog(u.filteredUser.Key, u.filter.logUserKeyInErrors),
 			err,
 		)
+		// COVERAGE: no way to simulate this condition in unit tests
 		u.filteredUser.Custom = nil
 		return json.Marshal(u.filteredUser)
 	}
 	defer func() {
 		// See comments on scrubUser.
 		if r := recover(); r != nil {
+			// COVERAGE: no way to simulate this condition in unit tests
 			output, err = marshalUserWithoutCustomAttrs(r)
 		}
 	}()
@@ -177,7 +180,8 @@ func (u serializableUser) MarshalJSON() (output []byte, err error) {
 	// than the custom ones, we want to treat that the same as a panic.
 	output, err = json.Marshal(u.filteredUser)
 	if err != nil {
+		// COVERAGE: no way to simulate this condition in unit tests
 		output, err = marshalUserWithoutCustomAttrs(err)
 	}
-	return
+	return //nolint:nakedret
 }

@@ -166,7 +166,7 @@ func (ef eventOutputFormatter) makeOutputEvent(evt interface{}) json.RawMessage 
 			User:         ef.userFilter.scrubUser(evt.User),
 		}
 	default:
-		return nil
+		return nil // COVERAGE: no way to simulate this condition in unit tests
 	}
 	bytes, _ := json.Marshal(outputEvent)
 	return json.RawMessage(bytes)

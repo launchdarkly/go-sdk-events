@@ -115,7 +115,7 @@ func (m *DiagnosticsManager) CanSendStatsEvent() bool {
 		case <-m.periodicEventGate: // non-blocking receive
 			return true
 		default:
-			return false
+			return false // COVERAGE: this path never executes in unit tests
 		}
 	}
 	return true
@@ -158,12 +158,12 @@ func (m *DiagnosticsManager) CreateStatsEventAndReset(
 
 func normalizeOSName(osName string) string {
 	switch osName {
-	case "darwin":
+	case "darwin": // COVERAGE: unit tests can only test one of these
 		return "MacOS"
-	case "windows":
+	case "windows": // COVERAGE: unit tests can only test one of these
 		return "Windows"
-	case "linux":
+	case "linux": // COVERAGE: unit tests can only test one of these
 		return "Linux"
 	}
-	return osName
+	return osName // COVERAGE: unit tests can only test one of these
 }

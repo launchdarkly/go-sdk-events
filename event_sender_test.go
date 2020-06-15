@@ -42,6 +42,22 @@ func (ei errorInfo) String() string {
 	return "network error"
 }
 
+func TestNewDefaultEventSender(t *testing.T) {
+	client := *http.DefaultClient
+	client.Timeout = time.Hour
+	headers := make(http.Header)
+	headers.Set("key", "value")
+
+	es := NewDefaultEventSender(&client, fakeEventsURI, fakeDiagnosticURI, headers, ldlog.NewDisabledLoggers())
+	des := es.(*defaultEventSender)
+	assert.NotNil(t, des.httpClient)
+	assert.Equal(t, client, *des.httpClient)
+	assert.Equal(t, fakeEventsURI, des.eventsURI)
+	assert.Equal(t, fakeDiagnosticURI, des.diagnosticURI)
+	assert.Equal(t, headers, des.headers)
+	assert.Equal(t, ldlog.NewDisabledLoggers(), des.loggers)
+}
+
 func TestDataIsSentToAnalyticsURI(t *testing.T) {
 	es, requestsCh := makeEventSenderWithRequestSink()
 
@@ -64,6 +80,15 @@ func TestDataIsSentToDiagnosticURI(t *testing.T) {
 	r := <-requestsCh
 	assert.Equal(t, fakeDiagnosticURI, r.Request.URL.String())
 	assert.Equal(t, fakeEventData, r.Body)
+}
+
+func TestUnknownDataKindIsIgnored(t *testing.T) {
+	es, requestsCh := makeEventSenderWithRequestSink()
+
+	result := es.SendEventData(EventDataKind("not valid"), fakeEventData, 1)
+	assert.False(t, result.Success)
+	assert.False(t, result.MustShutDown)
+	assert.Len(t, requestsCh, 0)
 }
 
 func TestAnalyticsEventsHaveSchemaAndPayloadIDHeaders(t *testing.T) {
@@ -187,6 +212,12 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 	}
 }
 
+func TestServerSideSenderHasDefaultClient(t *testing.T) {
+	es := NewServerSideEventSender(nil, sdkKey, fakeBaseURI, nil, ldlog.NewDisabledLoggers())
+	des := es.(*defaultEventSender)
+	assert.NotNil(t, des.httpClient)
+}
+
 func TestServerSideSenderSetsURIsFromBase(t *testing.T) {
 	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerWithStatus(202))
 	client := httphelpers.ClientFromHandler(handler)
@@ -233,13 +264,9 @@ func TestServerSideSenderAddsAuthorizationHeader(t *testing.T) {
 }
 
 func makeEventSenderWithHTTPClient(client *http.Client) EventSender {
-	return &defaultEventSender{
-		httpClient:    client,
-		eventsURI:     fakeEventsURI,
-		diagnosticURI: fakeDiagnosticURI,
-		loggers:       ldlog.NewDisabledLoggers(),
-		retryDelay:    briefRetryDelay,
-	}
+	es := NewDefaultEventSender(client, fakeEventsURI, fakeDiagnosticURI, nil, ldlog.NewDisabledLoggers())
+	(es.(*defaultEventSender)).retryDelay = briefRetryDelay
+	return es
 }
 
 func makeEventSenderWithRequestSink() (EventSender, <-chan httphelpers.HTTPRequestInfo) {

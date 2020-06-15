@@ -80,13 +80,13 @@ func (ep *defaultEventProcessor) postNonBlockingMessageToInbox(e eventDispatcher
 	select {
 	case ep.inboxCh <- e:
 		return
-	default:
+	default: // COVERAGE: no way to simulate this condition in unit tests
 	}
 	// If the inbox is full, it means the eventDispatcher is seriously backed up with not-yet-processed events.
 	// This is unlikely, but if it happens, it means the application is probably doing a ton of flag evaluations
 	// across many goroutines-- so if we wait for a space in the inbox, we risk a very serious slowdown of the
 	// app. To avoid that, we'll just drop the event. The log warning about this will only be shown once.
-	ep.inboxFullOnce.Do(func() {
+	ep.inboxFullOnce.Do(func() { // COVERAGE: no way to simulate this condition in unit tests
 		ep.loggers.Warn("Events are being produced faster than they can be processed; some events will be dropped")
 	})
 }
@@ -136,16 +136,16 @@ func startEventDispatcher(
 func (ed *eventDispatcher) runMainLoop(
 	inboxCh <-chan eventDispatcherMessage,
 ) {
-	if err := recover(); err != nil {
+	if err := recover(); err != nil { // COVERAGE: no way to simulate this condition in unit tests
 		ed.config.Loggers.Errorf("Unexpected panic in event processing thread: %+v", err)
 	}
 
 	flushInterval := ed.config.FlushInterval
-	if flushInterval <= 0 {
+	if flushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
 		flushInterval = DefaultFlushInterval
 	}
 	userKeysFlushInterval := ed.config.UserKeysFlushInterval
-	if userKeysFlushInterval <= 0 {
+	if userKeysFlushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
 		userKeysFlushInterval = DefaultUserKeysFlushInterval
 	}
 	flushTicker := time.NewTicker(flushInterval)
@@ -157,7 +157,7 @@ func (ed *eventDispatcher) runMainLoop(
 	if diagnosticsManager != nil {
 		interval := ed.config.DiagnosticRecordingInterval
 		if interval > 0 {
-			if interval < MinimumDiagnosticRecordingInterval {
+			if interval < MinimumDiagnosticRecordingInterval { // COVERAGE: no way to test this logic in unit tests
 				interval = DefaultDiagnosticRecordingInterval
 			}
 		} else {
@@ -201,6 +201,7 @@ func (ed *eventDispatcher) runMainLoop(
 			ed.userKeys.clear()
 		case <-diagnosticsTickerCh:
 			if diagnosticsManager == nil || !diagnosticsManager.CanSendStatsEvent() {
+				// COVERAGE: no way to test this logic in unit tests
 				break
 			}
 			event := diagnosticsManager.CreateStatsEventAndReset(
@@ -338,7 +339,7 @@ func (ed *eventDispatcher) sendDiagnosticsEvent(
 		// to pick up the last one. We'll just discard this diagnostic event - presumably
 		// we'll send another one later anyway, and we don't want this kind of nonessential
 		// data to cause any kind of back-pressure.
-		ed.workersGroup.Done()
+		ed.workersGroup.Done() // COVERAGE: no way to simulate this condition in unit tests
 	}
 }
 
@@ -355,22 +356,18 @@ func runFlushTask(config EventsConfiguration, flushCh <-chan *flushPayload,
 			break
 		}
 		if !payload.diagnosticEvent.IsNull() {
-			bytes, err := json.Marshal(payload.diagnosticEvent)
-			if err != nil {
-				config.Loggers.Errorf("Unexpected error marshalling diagnostic event: %+v", err)
-			} else {
-				_ = config.EventSender.SendEventData(DiagnosticEventDataKind, bytes, 1)
-			}
+			bytes, _ := json.Marshal(payload.diagnosticEvent)
+			// Disregarding error return from json.Marshal because the type we're marshaling, ldvalue.Value,
+			// cannot fail to marshal unless something is broken in the Value implementation - which we test
+			// separately in go-sdk-common.
+			_ = config.EventSender.SendEventData(DiagnosticEventDataKind, bytes, 1)
 		} else {
 			outputEvents := formatter.makeOutputEvents(payload.events, payload.summary)
 			if len(outputEvents) > 0 {
-				bytes, err := json.Marshal(outputEvents)
-				if err != nil {
-					config.Loggers.Errorf("Unexpected error marshalling event JSON: %+v", err)
-				} else {
-					result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, len(outputEvents))
-					resultFn(result)
-				}
+				bytes, _ := json.Marshal(outputEvents)
+				// As above, there's no plausible way for json.Marshal to fail here.
+				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, len(outputEvents))
+				resultFn(result)
 			}
 		}
 		workersGroup.Done() // Decrement the count of in-progress flushes
