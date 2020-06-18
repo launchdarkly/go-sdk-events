@@ -13,11 +13,15 @@ import (
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
 
+const (
+	fakeTime = ldtime.UnixMillisecondTime(100000)
+)
+
+func fakeTimeFn() ldtime.UnixMillisecondTime { return fakeTime }
+
 func TestEventOutput(t *testing.T) {
-	fakeTime := ldtime.UnixMillisecondTime(100000)
-	timeFn := func() ldtime.UnixMillisecondTime { return fakeTime }
-	withoutReasons := NewEventFactory(false, timeFn)
-	withReasons := NewEventFactory(true, timeFn)
+	withoutReasons := NewEventFactory(false, fakeTimeFn)
+	withReasons := NewEventFactory(true, fakeTimeFn)
 	user := User(lduser.NewUser("u"))
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
 

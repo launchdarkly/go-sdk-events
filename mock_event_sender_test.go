@@ -2,7 +2,6 @@ package ldevents
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
 	"testing"
 	"time"
@@ -33,7 +32,6 @@ func newMockEventSender() *mockEventSender {
 }
 
 func (ms *mockEventSender) SendEventData(kind EventDataKind, data []byte, eventCount int) EventSenderResult {
-	log.Printf("*** SendEventData: %s %s", kind, data)
 	var jsonData ldvalue.Value
 	err := json.Unmarshal(data, &jsonData)
 	if err != nil {
@@ -58,14 +56,10 @@ func (ms *mockEventSender) SendEventData(kind EventDataKind, data []byte, eventC
 
 	if gateCh != nil {
 		// instrumentation used for TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy
-		log.Printf("*** SendEventData signaling")
 		waitingCh <- struct{}{}
-		log.Printf("*** SendEventData waiting")
 		<-gateCh
-		log.Printf("*** SendEventData waited")
 	}
 
-	log.Printf("*** SendEventData returning")
 	return result
 }
 
