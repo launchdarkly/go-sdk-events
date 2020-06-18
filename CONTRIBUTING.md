@@ -16,7 +16,7 @@ We encourage pull requests and other contributions from the community. Before su
  
 This project should be built against Go 1.13 or newer.
 
-Note that the public import path is `gopkg.in/launchdarkly/go-sdk-events.v1` (using the [`gopkg.in`](https://labix.org/gopkg.in) service as a simple way to pin to a major version). Since it does not use Go modules, and it references its own import path in imports between packages, this means that in order to build it you must check it out at `$GOPATH/src/gopkg.in/launchdarkly/go-sdk-events.v1`-- not `$GOPATH/src/github.com/launchdarkly/go-sdk-events`.
+Note that the base import path is `gopkg.in/launchdarkly/go-sdk-events.v1`, not `github.com/launchdarkly/go-sdk-events`. This ensures that the package can be referenced not only as a Go module, but also by projects that use older tools like `dep` and `govendor`, because the 5.x release of the Go SDK supports either module or non-module usage. Future releases of this package, and of the Go SDK, may drop support for non-module usage.
 
 ### Building
 
