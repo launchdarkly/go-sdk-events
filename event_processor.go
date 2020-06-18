@@ -1,10 +1,10 @@
 package ldevents
 
 import (
-	"encoding/json"
 	"sync"
 	"time"
 
+	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
@@ -356,17 +356,17 @@ func runFlushTask(config EventsConfiguration, flushCh <-chan *flushPayload,
 			break
 		}
 		if !payload.diagnosticEvent.IsNull() {
-			bytes, _ := json.Marshal(payload.diagnosticEvent)
+			var buf jsonstream.JSONBuffer
+			payload.diagnosticEvent.WriteToJSONBuffer(&buf)
+			bytes, _ := buf.Get()
 			// Disregarding error return from json.Marshal because the type we're marshaling, ldvalue.Value,
-			// cannot fail to marshal unless something is broken in the Value implementation - which we test
-			// separately in go-sdk-common.
+			// cannot fail to marshal unless something is broken in the Value or JSONBuffer implementations -
+			// which we test separately in go-sdk-common.
 			_ = config.EventSender.SendEventData(DiagnosticEventDataKind, bytes, 1)
 		} else {
-			outputEvents := formatter.makeOutputEvents(payload.events, payload.summary)
-			if len(outputEvents) > 0 {
-				bytes, _ := json.Marshal(outputEvents)
-				// As above, there's no plausible way for json.Marshal to fail here.
-				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, len(outputEvents))
+			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)
+			if len(bytes) > 0 {
+				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, count)
 				resultFn(result)
 			}
 		}

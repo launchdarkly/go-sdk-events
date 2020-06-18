@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
+
 	"github.com/stretchr/testify/assert"
 
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
@@ -648,14 +650,25 @@ func TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy(t *testing.T) {
 func jsonEncoding(o interface{}) ldvalue.Value {
 	bytes, _ := json.Marshal(o)
 	var result ldvalue.Value
-	_ = json.Unmarshal(bytes, &result)
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		panic(err)
+	}
 	return result
 }
 
 func userJsonEncoding(u EventUser) ldvalue.Value {
 	filter := newUserFilter(epDefaultConfig)
-	fu := filter.scrubUser(u).filteredUser
-	return jsonEncoding(fu)
+	var b jsonstream.JSONBuffer
+	filter.writeUser(&b, u)
+	bytes, err := b.Get()
+	if err != nil {
+		panic(err)
+	}
+	var result ldvalue.Value
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		panic(err)
+	}
+	return result
 }
 
 func expectedIdentifyEvent(sourceEvent Event, encodedUser ldvalue.Value) ldvalue.Value {
@@ -693,8 +706,6 @@ func expectedFeatureEvent(sourceEvent FeatureRequestEvent, flag FlagEventPropert
 	}
 	if sourceEvent.Reason.GetKind() != "" {
 		expected.Set("reason", jsonEncoding(sourceEvent.Reason))
-	} else {
-		expected.Set("reason", ldvalue.Null())
 	}
 	if inlineUser == nil {
 		expected.Set("userKey", ldvalue.String(sourceEvent.User.GetKey()))

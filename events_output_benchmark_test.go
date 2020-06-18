@@ -1,7 +1,6 @@
 package ldevents
 
 import (
-	"encoding/json"
 	"testing"
 
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
@@ -21,8 +20,7 @@ func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		outputEvents := ef.makeOutputEvents(events, eventSummary{})
-		benchmarkBytesResult, _ = json.Marshal(outputEvents)
+		benchmarkBytesResult, _ = ef.makeOutputEvents(events, eventSummary{})
 	}
 }
 
@@ -39,8 +37,7 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		outputEvents := ef.makeOutputEvents(events, eventSummary{})
-		benchmarkBytesResult, _ = json.Marshal(outputEvents)
+		benchmarkBytesResult, _ = ef.makeOutputEvents(events, eventSummary{})
 	}
 }
 
@@ -104,7 +101,6 @@ func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		outputEvents := ef.makeOutputEvents(nil, summary)
-		benchmarkBytesResult, _ = json.Marshal(outputEvents)
+		benchmarkBytesResult, _ = ef.makeOutputEvents(nil, summary)
 	}
 }

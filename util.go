@@ -4,14 +4,6 @@ import (
 	"fmt"
 )
 
-func describeUserForErrorLog(key string, logUserKeyInErrors bool) string {
-	// COVERAGE: this function is never called in unit tests because we have no way to simulate such an error
-	if logUserKeyInErrors {
-		return fmt.Sprintf("user '%s'", key) // COVERAGE: see above
-	}
-	return "a user (enable LogUserKeyInErrors to see the user key)" // COVERAGE: see above
-}
-
 func httpErrorMessage(statusCode int, context string, recoverableMessage string) string {
 	statusDesc := ""
 	if statusCode == 401 {
