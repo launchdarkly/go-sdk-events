@@ -105,13 +105,13 @@ func (s *defaultEventSender) SendEventData(kind EventDataKind, data []byte, even
 		if attempt > 0 {
 			delay := s.retryDelay
 			if delay == 0 {
-				delay = time.Second
+				delay = time.Second // COVERAGE: unit tests always set a short delay
 			}
 			s.loggers.Warnf("Will retry posting events after %f second", delay/time.Second)
 			time.Sleep(delay)
 		}
 		req, reqErr := http.NewRequest("POST", uri, bytes.NewReader(data))
-		if reqErr != nil {
+		if reqErr != nil { // COVERAGE: no way to simulate this condition in unit tests
 			s.loggers.Errorf("Unexpected error while creating event request: %+v", reqErr)
 			return EventSenderResult{}
 		}

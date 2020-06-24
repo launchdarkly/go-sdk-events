@@ -1,6 +1,6 @@
 # LaunchDarkly Go SDK Events Engine
 
-[![Circle CI](https://circleci.com/gh/launchdarkly/go-sdk-events.svg?style=svg)](https://circleci.com/gh/launchdarkly/go-sdk-events)
+[![Circle CI](https://circleci.com/gh/launchdarkly/go-sdk-events.svg?style=svg)](https://circleci.com/gh/launchdarkly/go-sdk-events) [![Documentation](https://godoc.org/gopkg.in/launchdarkly/go-sdk-events.v1?status.svg)](https://godoc.org/gopkg.in/launchdarkly/go-sdk-events.v1.v5)
 
 ## This is a prerelease repository
 
@@ -8,9 +8,9 @@ This project currently contains prerelease code to support development of Go SDK
 
 ## Overview
 
-This repository contains the analytics event logic and event data model used by the [LaunchDarkly Go SDK](https://github.com/launchdarkly/go-server-sdk). It is packaged separately because it is also used by internal LaunchDarkly components. Applications using the LaunchDarkly Go SDK should not need to reference this package directly.
+This repository contains the internal analytics event logic and event data model used by the [LaunchDarkly Go SDK](https://github.com/launchdarkly/go-server-sdk). It is packaged separately because it is also used by internal LaunchDarkly components. Applications using the LaunchDarkly Go SDK should not need to reference this package directly.
 
-Note that the base import path is `gopkg.in/launchdarkly/go-sdk-events.v1` (to ensure that you receive the latest release of major version 1.x), not `github.com/launchdarkly/go-sdk-events`.
+Note that the base import path is `gopkg.in/launchdarkly/go-sdk-events.v1`, not `github.com/launchdarkly/go-sdk-events`. This ensures that the package can be referenced not only as a Go module, but also by projects that use older tools like `dep` and `govendor`, because the 5.x release of the Go SDK supports either module or non-module usage. Future releases of this package, and of the Go SDK, may drop support for non-module usage.
 
 ## Supported Go versions
 

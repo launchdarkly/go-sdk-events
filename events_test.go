@@ -1,8 +1,14 @@
 package ldevents
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
+	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
 
 var defaultEventFactory = NewEventFactory(false, nil)
@@ -26,4 +32,155 @@ func (f flagEventPropertiesImpl) GetDebugEventsUntilDate() ldtime.UnixMillisecon
 }
 func (f flagEventPropertiesImpl) IsExperimentationEnabled(reason ldreason.EvaluationReason) bool {
 	return f.IsExperiment
+}
+
+func TestEventFactory(t *testing.T) {
+	fakeTime := ldtime.UnixMillisecondTime(100000)
+	timeFn := func() ldtime.UnixMillisecondTime { return fakeTime }
+	withoutReasons := NewEventFactory(false, timeFn)
+	withReasons := NewEventFactory(true, timeFn)
+	user := User(lduser.NewUser("u"))
+
+	t.Run("NewSuccessfulEvalEvent", func(t *testing.T) {
+		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+
+		expected := FeatureRequestEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+			Key:       flag.Key,
+			Version:   flag.Version,
+			Variation: 1,
+			Value:     ldvalue.String("value"),
+			Default:   ldvalue.String("default"),
+			Reason:    ldreason.NewEvalReasonFallthrough(),
+			PrereqOf:  ldvalue.NewOptionalString("pre"),
+		}
+
+		event1 := withoutReasons.NewSuccessfulEvalEvent(flag, user, expected.Variation, expected.Value,
+			expected.Default, expected.Reason, "pre")
+		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
+		event1.Reason = expected.Reason
+		assert.Equal(t, expected, event1)
+
+		event2 := withReasons.NewSuccessfulEvalEvent(flag, user, expected.Variation, expected.Value,
+			expected.Default, expected.Reason, "pre")
+		assert.Equal(t, expected, event2)
+	})
+
+	t.Run("NewSuccessfulEvalEvent with tracking/debugging", func(t *testing.T) {
+		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+
+		expected := FeatureRequestEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+			Key:       flag.Key,
+			Version:   flag.Version,
+			Variation: 1,
+			Value:     ldvalue.String("value"),
+			Default:   ldvalue.String("default"),
+		}
+
+		flag1 := flag
+		flag1.TrackEvents = true
+		expected1 := expected
+		expected1.TrackEvents = true
+		event1 := withoutReasons.NewSuccessfulEvalEvent(flag1, user, expected.Variation, expected.Value,
+			expected.Default, ldreason.NewEvalReasonFallthrough(), "")
+		assert.Equal(t, expected1, event1)
+
+		flag2 := flag
+		flag2.DebugEventsUntilDate = ldtime.UnixMillisecondTime(200000)
+		expected2 := expected
+		expected2.DebugEventsUntilDate = flag2.DebugEventsUntilDate
+		event2 := withoutReasons.NewSuccessfulEvalEvent(flag2, user, expected.Variation, expected.Value,
+			expected.Default, ldreason.NewEvalReasonFallthrough(), "")
+		assert.Equal(t, expected2, event2)
+	})
+
+	t.Run("NewSuccessfulEvalEvent with experimentation", func(t *testing.T) {
+		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100, IsExperiment: true}
+
+		expected := FeatureRequestEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+			Key:         flag.Key,
+			Version:     flag.Version,
+			Variation:   1,
+			Value:       ldvalue.String("value"),
+			Default:     ldvalue.String("default"),
+			Reason:      ldreason.NewEvalReasonFallthrough(),
+			TrackEvents: true,
+		}
+
+		event := withoutReasons.NewSuccessfulEvalEvent(flag, user, expected.Variation, expected.Value,
+			expected.Default, ldreason.NewEvalReasonFallthrough(), "")
+		assert.Equal(t, expected, event)
+	})
+
+	t.Run("NewUnknownFlagEvent", func(t *testing.T) {
+		expected := FeatureRequestEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+			Key:       "unknown-key",
+			Version:   -1,
+			Variation: -1,
+			Value:     ldvalue.String("default"),
+			Default:   ldvalue.String("default"),
+			Reason:    ldreason.NewEvalReasonFallthrough(),
+		}
+
+		event1 := withoutReasons.NewUnknownFlagEvent(expected.Key, user, expected.Default, expected.Reason)
+		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
+		event1.Reason = expected.Reason
+		assert.Equal(t, expected, event1)
+
+		event2 := withReasons.NewUnknownFlagEvent(expected.Key, user, expected.Default, expected.Reason)
+		assert.Equal(t, expected, event2)
+	})
+
+	t.Run("NewCustomEvent", func(t *testing.T) {
+		expected := CustomEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+			Key:         "event-key",
+			Data:        ldvalue.String("data"),
+			HasMetric:   true,
+			MetricValue: 2,
+		}
+
+		event := withoutReasons.NewCustomEvent(expected.Key, user, expected.Data, true, expected.MetricValue)
+		assert.Equal(t, expected, event)
+	})
+
+	t.Run("NewIdentifyEvent", func(t *testing.T) {
+		expected := IdentifyEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+		}
+
+		event := withoutReasons.NewIdentifyEvent(user)
+		assert.Equal(t, expected, event)
+	})
+
+	t.Run("IndexEvent (not from factory)", func(t *testing.T) {
+		ie := IndexEvent{
+			BaseEvent: BaseEvent{
+				CreationDate: fakeTime,
+				User:         user,
+			},
+		}
+		assert.Equal(t, ie.BaseEvent, ie.GetBase())
+	})
 }

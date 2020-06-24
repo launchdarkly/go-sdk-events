@@ -4,13 +4,6 @@ import (
 	"fmt"
 )
 
-func describeUserForErrorLog(key string, logUserKeyInErrors bool) string {
-	if logUserKeyInErrors {
-		return fmt.Sprintf("user '%s'", key)
-	}
-	return "a user (enable LogUserKeyInErrors to see the user key)"
-}
-
 func httpErrorMessage(statusCode int, context string, recoverableMessage string) string {
 	statusDesc := ""
 	if statusCode == 401 {
