@@ -68,7 +68,15 @@ func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
 	}
 }
 
-func (ep *defaultEventProcessor) SendEvent(e Event) {
+func (ep *defaultEventProcessor) RecordFeatureRequestEvent(e FeatureRequestEvent) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+}
+
+func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+}
+
+func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEvent) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
@@ -218,9 +226,6 @@ func (ed *eventDispatcher) runMainLoop(
 }
 
 func (ed *eventDispatcher) processEvent(evt Event) {
-	// Always record the event in the summarizer.
-	ed.outbox.addToSummary(evt)
-
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
@@ -228,6 +233,7 @@ func (ed *eventDispatcher) processEvent(evt Event) {
 	inlinedUser := ed.config.InlineUsersInEvents
 	switch evt := evt.(type) {
 	case FeatureRequestEvent:
+		ed.outbox.addToSummary(evt) // add all feature events to summaries
 		willAddFullEvent = evt.TrackEvents
 		if ed.shouldDebugEvent(&evt) {
 			de := evt
@@ -247,7 +253,7 @@ func (ed *eventDispatcher) processEvent(evt Event) {
 		if alreadySeenUser {
 			ed.deduplicatedUsers++
 		} else {
-			indexEvent := IndexEvent{
+			indexEvent := indexEvent{
 				BaseEvent{CreationDate: evt.GetBase().CreationDate, User: user},
 			}
 			ed.outbox.addEvent(indexEvent)

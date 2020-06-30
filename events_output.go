@@ -111,7 +111,7 @@ func (ef eventOutputFormatter) writeOutputEvent(b *jsonstream.JSONBuffer, evt Ev
 		b.WriteName("user")
 		ef.userFilter.writeUser(b, evt.User)
 
-	case IndexEvent:
+	case indexEvent:
 		beginEventFields(b, IndexEventKind, evt.BaseEvent.CreationDate)
 		b.WriteName("user")
 		ef.userFilter.writeUser(b, evt.User)

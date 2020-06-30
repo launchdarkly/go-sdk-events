@@ -78,8 +78,9 @@ type IdentifyEvent struct {
 	BaseEvent
 }
 
-// IndexEvent is generated internally to capture user details from other events.
-type IndexEvent struct {
+// indexEvent is generated internally to capture user details from other events. It is an implementation
+// detail of DefaultEventProcessor, so it is not exported.
+type indexEvent struct {
 	BaseEvent
 }
 
@@ -207,6 +208,6 @@ func (evt IdentifyEvent) GetBase() BaseEvent {
 }
 
 // GetBase returns the BaseEvent
-func (evt IndexEvent) GetBase() BaseEvent {
+func (evt indexEvent) GetBase() BaseEvent {
 	return evt.BaseEvent
 }

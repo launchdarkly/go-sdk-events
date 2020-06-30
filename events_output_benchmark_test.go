@@ -70,7 +70,7 @@ func makeBasicEvents() []Event {
 			MetricValue: 1234,
 		},
 		IdentifyEvent{BaseEvent: baseEvent},
-		IndexEvent{BaseEvent: baseEvent},
+		indexEvent{BaseEvent: baseEvent},
 	}
 }
 

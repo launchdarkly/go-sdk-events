@@ -41,14 +41,8 @@ func newEventSummary() eventSummary {
 	}
 }
 
-// Adds this event to our counters, if it is a type of event we need to count.
-func (s *eventSummarizer) summarizeEvent(evt Event) {
-	var fe FeatureRequestEvent
-	var ok bool
-	if fe, ok = evt.(FeatureRequestEvent); !ok {
-		return
-	}
-
+// Adds this event to our counters.
+func (s *eventSummarizer) summarizeEvent(fe FeatureRequestEvent) {
 	key := counterKey{key: fe.Key, variation: fe.Variation, version: fe.Version}
 
 	if value, ok := s.eventsState.counters[key]; ok {
