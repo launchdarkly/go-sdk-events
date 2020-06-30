@@ -21,16 +21,14 @@ func BenchmarkEventProcessor(b *testing.B) {
 	configDefault := EventsConfiguration{Capacity: 1000}
 	configWithInlineUsers := EventsConfiguration{Capacity: 1000, InlineUsersInEvents: true}
 
-	doEvents := func(b *testing.B, config EventsConfiguration, events []Event) {
+	doEvents := func(b *testing.B, config EventsConfiguration, sendEvents func(EventProcessor)) {
 		ep, es := createBenchmarkEventProcessorAndSender(config)
 		defer ep.Close()
 
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			for _, e := range events {
-				ep.SendEvent(e)
-			}
+			sendEvents(ep)
 			ep.Flush()
 			es.awaitPayload()
 		}
@@ -39,19 +37,19 @@ func BenchmarkEventProcessor(b *testing.B) {
 	}
 
 	b.Run("summarize feature events", func(b *testing.B) {
-		doEvents(b, configDefault, makeBenchmarkFeatureEvents(false))
+		doEvents(b, configDefault, sendBenchmarkFeatureEvents(false))
 	})
 
 	b.Run("feature events with full tracking", func(b *testing.B) {
-		doEvents(b, configDefault, makeBenchmarkFeatureEvents(true))
+		doEvents(b, configDefault, sendBenchmarkFeatureEvents(true))
 	})
 
 	b.Run("custom events", func(b *testing.B) {
-		doEvents(b, configDefault, makeBenchmarkCustomEvents())
+		doEvents(b, configDefault, sendBenchmarkCustomEvents())
 	})
 
 	b.Run("custom events with inline users", func(b *testing.B) {
-		doEvents(b, configWithInlineUsers, makeBenchmarkCustomEvents())
+		doEvents(b, configWithInlineUsers, sendBenchmarkCustomEvents())
 	})
 }
 
@@ -67,8 +65,8 @@ func makeBenchmarkUsers() []lduser.User {
 	return ret
 }
 
-func makeBenchmarkFeatureEvents(tracking bool) []Event {
-	ret := make([]Event, 0, benchmarkEventCount)
+func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
+	events := make([]FeatureRequestEvent, 0, benchmarkEventCount)
 	users := makeBenchmarkUsers()
 	flagCount := 10
 	flagVersions := 3
@@ -88,14 +86,18 @@ func makeBenchmarkFeatureEvents(tracking bool) []Event {
 			Value:       ldvalue.Int(variation),
 			TrackEvents: tracking,
 		}
-		ret = append(ret, event)
+		events = append(events, event)
 	}
 
-	return ret
+	return func(ep EventProcessor) {
+		for _, e := range events {
+			ep.RecordFeatureRequestEvent(e)
+		}
+	}
 }
 
-func makeBenchmarkCustomEvents() []Event {
-	ret := make([]Event, 0, benchmarkEventCount)
+func sendBenchmarkCustomEvents() func(EventProcessor) {
+	events := make([]CustomEvent, 0, benchmarkEventCount)
 	users := makeBenchmarkUsers()
 	keyCount := 5
 	rnd := rand.New(rand.NewSource(int64(ldtime.UnixMillisNow())))
@@ -109,10 +111,14 @@ func makeBenchmarkCustomEvents() []Event {
 			Key:  fmt.Sprintf("event%d", rnd.Intn(keyCount)),
 			Data: ldvalue.String("data"),
 		}
-		ret = append(ret, event)
+		events = append(events, event)
 	}
 
-	return ret
+	return func(ep EventProcessor) {
+		for _, e := range events {
+			ep.RecordCustomEvent(e)
+		}
+	}
 }
 
 // This is  simpler than the mockEventSender used in other tests, because we don't need to parse the event

@@ -174,8 +174,8 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, expected, event)
 	})
 
-	t.Run("IndexEvent (not from factory)", func(t *testing.T) {
-		ie := IndexEvent{
+	t.Run("indexEvent (not from factory)", func(t *testing.T) {
+		ie := indexEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				User:         user,

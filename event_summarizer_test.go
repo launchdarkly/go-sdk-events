@@ -23,26 +23,6 @@ func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string, flag
 	}
 }
 
-func TestSummarizeEventDoesNothingForIdentifyEvent(t *testing.T) {
-	es := newEventSummarizer()
-	snapshot := es.snapshot()
-
-	event := defaultEventFactory.NewIdentifyEvent(user)
-	es.summarizeEvent(event)
-
-	assert.Equal(t, snapshot, es.snapshot())
-}
-
-func TestSummarizeEventDoesNothingForCustomEvent(t *testing.T) {
-	es := newEventSummarizer()
-	snapshot := es.snapshot()
-
-	event := defaultEventFactory.NewCustomEvent("whatever", user, ldvalue.Null(), false, 0)
-	es.summarizeEvent(event)
-
-	assert.Equal(t, snapshot, es.snapshot())
-}
-
 func TestSummarizeEventSetsStartAndEndDates(t *testing.T) {
 	es := newEventSummarizer()
 	flagKey := "key"

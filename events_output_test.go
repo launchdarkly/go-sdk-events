@@ -90,7 +90,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 	})
 
 	t.Run("index", func(t *testing.T) {
-		event := IndexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, User: user}}
+		event := indexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, User: user}}
 		verifyEventOutput(t, defaultFormatter, event,
 			`{"kind":"index","creationDate":100000,"user":{"key":"u"}}`)
 	})

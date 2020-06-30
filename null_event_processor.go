@@ -7,7 +7,11 @@ func NewNullEventProcessor() EventProcessor {
 	return nullEventProcessor{}
 }
 
-func (n nullEventProcessor) SendEvent(e Event) {}
+func (n nullEventProcessor) RecordFeatureRequestEvent(e FeatureRequestEvent) {}
+
+func (n nullEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {}
+
+func (n nullEventProcessor) RecordCustomEvent(e CustomEvent) {}
 
 func (n nullEventProcessor) Flush() {}
 

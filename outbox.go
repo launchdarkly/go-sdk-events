@@ -35,18 +35,26 @@ func (b *eventsOutbox) addEvent(event Event) {
 	b.events = append(b.events, event)
 }
 
-func (b *eventsOutbox) addToSummary(event Event) {
+func (b *eventsOutbox) addToSummary(event FeatureRequestEvent) {
 	b.summarizer.summarizeEvent(event)
 }
 
 func (b *eventsOutbox) getPayload() flushPayload {
+	var copied []Event
+	if len(b.events) > 0 {
+		copied = make([]Event, len(b.events))
+		copy(copied, b.events)
+	}
 	return flushPayload{
-		events:  b.events,
+		events:  copied,
 		summary: b.summarizer.snapshot(),
 	}
 }
 
 func (b *eventsOutbox) clear() {
-	b.events = make([]Event, 0, b.capacity)
+	for i := range b.events {
+		b.events[i] = nil
+	}
+	b.events = b.events[0:0]
 	b.summarizer.reset()
 }
