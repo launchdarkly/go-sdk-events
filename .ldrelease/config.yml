@@ -9,5 +9,5 @@ template:
   name: go
 
 publications:
-  - url: https://godoc.org/github.com/launchdarkly/go-sdk-events
+  - url: https://pkg.go.dev/github.com/launchdarkly/go-sdk-events
     description: documentation
