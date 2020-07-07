@@ -1,7 +1,6 @@
 package ldevents
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -9,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/launchdarkly/go-test-helpers/httphelpers"
+	"github.com/launchdarkly/go-test-helpers/v2/httphelpers"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 )
@@ -25,18 +24,17 @@ var fakeEventData = []byte("hello")
 
 type errorInfo struct {
 	status int
-	err    error
 }
 
 func (ei errorInfo) Handler() http.Handler {
-	if ei.err == nil {
+	if ei.status > 0 {
 		return httphelpers.HandlerWithStatus(ei.status)
 	}
-	return httphelpers.PanicHandler(ei.err)
+	return httphelpers.BrokenConnectionHandler()
 }
 
 func (ei errorInfo) String() string {
-	if ei.err == nil {
+	if ei.status > 0 {
 		return fmt.Sprintf("error %d", ei.status)
 	}
 	return "network error"
@@ -135,7 +133,7 @@ func TestEventSenderParsesTimeFromServer(t *testing.T) {
 }
 
 func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
-	errs := []errorInfo{{400, nil}, {408, nil}, {429, nil}, {500, nil}, {503, nil}, {0, errors.New("fake network error")}}
+	errs := []errorInfo{{400}, {408}, {429}, {500}, {503}, {0}}
 	for _, errorInfo := range errs {
 		t.Run(fmt.Sprintf("Retries once after %s", errorInfo), func(t *testing.T) {
 			handler, requestsCh := httphelpers.RecordingHandler(
@@ -189,7 +187,7 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 }
 
 func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
-	errs := []errorInfo{{401, nil}, {403, nil}}
+	errs := []errorInfo{{401}, {403}}
 	for _, errorInfo := range errs {
 		t.Run(fmt.Sprintf("Fails permanently after %s", errorInfo), func(t *testing.T) {
 			handler, requestsCh := httphelpers.RecordingHandler(
