@@ -31,25 +31,27 @@ func TestEventOutputFullEvents(t *testing.T) {
 	formatterWithInlineUsers.config.InlineUsersInEvents = true
 
 	t.Run("feature", func(t *testing.T) {
-		event1 := withoutReasons.NewSuccessfulEvalEvent(flag, user, 1, ldvalue.String("v"),
-			ldvalue.String("dv"), noReason, "")
+		event1 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			ldvalue.String("dv"), "")
 		verifyEventOutput(t, defaultFormatter, event1,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv"}`)
 		verifyEventOutput(t, formatterWithInlineUsers, event1,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"user":{"key":"u"},"variation":1,"value":"v","default":"dv"}`)
 
-		event1r := withReasons.NewSuccessfulEvalEvent(flag, user, 1, ldvalue.String("v"),
-			ldvalue.String("dv"), ldreason.NewEvalReasonFallthrough(), "")
+		event1r := withReasons.NewEvalEvent(flag, user,
+			ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, ldreason.NewEvalReasonFallthrough()),
+			ldvalue.String("dv"), "")
 		verifyEventOutput(t, defaultFormatter, event1r,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv","reason":{"kind":"FALLTHROUGH"}}`)
 
-		event2 := withoutReasons.NewSuccessfulEvalEvent(flag, user, -1, ldvalue.String("v"),
-			ldvalue.String("dv"), noReason, "")
+		event2 := withoutReasons.NewEvalEvent(flag, user, ldreason.EvaluationDetail{Value: ldvalue.String("v")},
+			ldvalue.String("dv"), "")
+		event2.Variation = ldvalue.OptionalInt{}
 		verifyEventOutput(t, defaultFormatter, event2,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","value":"v","default":"dv"}`)
 
-		event3 := withoutReasons.NewSuccessfulEvalEvent(flag, user, 1, ldvalue.String("v"),
-			ldvalue.String("dv"), noReason, "pre")
+		event3 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			ldvalue.String("dv"), "pre")
 		verifyEventOutput(t, defaultFormatter, event3,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv","prereqOf":"pre"}`)
 
@@ -60,8 +62,8 @@ func TestEventOutputFullEvents(t *testing.T) {
 	})
 
 	t.Run("debug", func(t *testing.T) {
-		event1 := withoutReasons.NewSuccessfulEvalEvent(flag, user, 1, ldvalue.String("v"),
-			ldvalue.String("dv"), noReason, "")
+		event1 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			ldvalue.String("dv"), "")
 		event1.Debug = true
 		verifyEventOutput(t, defaultFormatter, event1,
 			`{"kind":"debug","creationDate":100000,"key":"flagkey","version":100,"user":{"key":"u"},"variation":1,"value":"v","default":"dv"}`)
@@ -108,15 +110,16 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 
 	t.Run("summary - single flag, single counter", func(t *testing.T) {
 		es1 := newEventSummarizer()
-		event1 := withoutReasons.NewSuccessfulEvalEvent(flag1v1, user, 1, ldvalue.String("v"),
-			ldvalue.String("dv"), noReason, "")
+		event1 := withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			ldvalue.String("dv"), "")
 		es1.summarizeEvent(event1)
 		verifySummaryEventOutput(t, defaultFormatter, es1.snapshot(),
 			`{"kind":"summary","startDate":100000,"endDate":100000,"features":{"flag1":{"counters":[{"count":1,"value":"v","variation":1,"version":100}],"default":"dv"}}}`)
 
 		es2 := newEventSummarizer()
-		event2 := withoutReasons.NewSuccessfulEvalEvent(flag1v1, user, -1, ldvalue.String("dv"),
-			ldvalue.String("dv"), noReason, "")
+		event2 := withoutReasons.NewEvalEvent(flag1v1, user, ldreason.EvaluationDetail{Value: ldvalue.String("dv")},
+			ldvalue.String("dv"), "")
+		event2.Variation = ldvalue.OptionalInt{}
 		es2.summarizeEvent(event2)
 		verifySummaryEventOutput(t, defaultFormatter, es2.snapshot(),
 			`{"kind":"summary","startDate":100000,"endDate":100000,"features":{"flag1":{"counters":[{"count":1,"value":"dv","version":100}],"default":"dv"}}}`)
@@ -131,16 +134,16 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 
 	t.Run("summary - multiple counters", func(t *testing.T) {
 		es := newEventSummarizer()
-		es.summarizeEvent(withoutReasons.NewSuccessfulEvalEvent(flag1v1, user, 1, ldvalue.String("a"),
-			flag1Default, noReason, ""))
-		es.summarizeEvent(withoutReasons.NewSuccessfulEvalEvent(flag1v1, user, 2, ldvalue.String("b"),
-			flag1Default, noReason, ""))
-		es.summarizeEvent(withoutReasons.NewSuccessfulEvalEvent(flag1v1, user, 1, ldvalue.String("a"),
-			flag1Default, noReason, ""))
-		es.summarizeEvent(withoutReasons.NewSuccessfulEvalEvent(flag1v2, user, 1, ldvalue.String("a"),
-			flag1Default, noReason, ""))
-		es.summarizeEvent(withoutReasons.NewSuccessfulEvalEvent(flag2, user, 3, ldvalue.String("c"),
-			flag2Default, noReason, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
+			flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
+			flag2Default, ""))
 
 		bytes, count := defaultFormatter.makeOutputEvents(nil, es.snapshot())
 		require.Equal(t, 1, count)
