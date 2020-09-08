@@ -50,22 +50,24 @@ func TestEventFactory(t *testing.T) {
 				User:         user,
 			},
 			Key:       flag.Key,
-			Version:   flag.Version,
-			Variation: 1,
+			Version:   ldvalue.NewOptionalInt(flag.Version),
+			Variation: ldvalue.NewOptionalInt(1),
 			Value:     ldvalue.String("value"),
 			Default:   ldvalue.String("default"),
 			Reason:    ldreason.NewEvalReasonFallthrough(),
 			PrereqOf:  ldvalue.NewOptionalString("pre"),
 		}
 
-		event1 := withoutReasons.NewSuccessfulEvalEvent(flag, user, expected.Variation, expected.Value,
-			expected.Default, expected.Reason, "pre")
+		event1 := withoutReasons.NewEvalEvent(flag, user,
+			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
+			expected.Default, "pre")
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 
-		event2 := withReasons.NewSuccessfulEvalEvent(flag, user, expected.Variation, expected.Value,
-			expected.Default, expected.Reason, "pre")
+		event2 := withReasons.NewEvalEvent(flag, user,
+			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
+			expected.Default, "pre")
 		assert.Equal(t, expected, event2)
 	})
 
@@ -78,8 +80,8 @@ func TestEventFactory(t *testing.T) {
 				User:         user,
 			},
 			Key:       flag.Key,
-			Version:   flag.Version,
-			Variation: 1,
+			Version:   ldvalue.NewOptionalInt(flag.Version),
+			Variation: ldvalue.NewOptionalInt(1),
 			Value:     ldvalue.String("value"),
 			Default:   ldvalue.String("default"),
 		}
@@ -88,16 +90,18 @@ func TestEventFactory(t *testing.T) {
 		flag1.TrackEvents = true
 		expected1 := expected
 		expected1.TrackEvents = true
-		event1 := withoutReasons.NewSuccessfulEvalEvent(flag1, user, expected.Variation, expected.Value,
-			expected.Default, ldreason.NewEvalReasonFallthrough(), "")
+		event1 := withoutReasons.NewEvalEvent(flag1, user,
+			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
+			expected.Default, "")
 		assert.Equal(t, expected1, event1)
 
 		flag2 := flag
 		flag2.DebugEventsUntilDate = ldtime.UnixMillisecondTime(200000)
 		expected2 := expected
 		expected2.DebugEventsUntilDate = flag2.DebugEventsUntilDate
-		event2 := withoutReasons.NewSuccessfulEvalEvent(flag2, user, expected.Variation, expected.Value,
-			expected.Default, ldreason.NewEvalReasonFallthrough(), "")
+		event2 := withoutReasons.NewEvalEvent(flag2, user,
+			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
+			expected.Default, "")
 		assert.Equal(t, expected2, event2)
 	})
 
@@ -110,16 +114,17 @@ func TestEventFactory(t *testing.T) {
 				User:         user,
 			},
 			Key:         flag.Key,
-			Version:     flag.Version,
-			Variation:   1,
+			Version:     ldvalue.NewOptionalInt(flag.Version),
+			Variation:   ldvalue.NewOptionalInt(1),
 			Value:       ldvalue.String("value"),
 			Default:     ldvalue.String("default"),
 			Reason:      ldreason.NewEvalReasonFallthrough(),
 			TrackEvents: true,
 		}
 
-		event := withoutReasons.NewSuccessfulEvalEvent(flag, user, expected.Variation, expected.Value,
-			expected.Default, ldreason.NewEvalReasonFallthrough(), "")
+		event := withoutReasons.NewEvalEvent(flag, user,
+			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
+			expected.Default, "")
 		assert.Equal(t, expected, event)
 	})
 
@@ -129,12 +134,10 @@ func TestEventFactory(t *testing.T) {
 				CreationDate: fakeTime,
 				User:         user,
 			},
-			Key:       "unknown-key",
-			Version:   -1,
-			Variation: -1,
-			Value:     ldvalue.String("default"),
-			Default:   ldvalue.String("default"),
-			Reason:    ldreason.NewEvalReasonFallthrough(),
+			Key:     "unknown-key",
+			Value:   ldvalue.String("default"),
+			Default: ldvalue.String("default"),
+			Reason:  ldreason.NewEvalReasonFallthrough(),
 		}
 
 		event1 := withoutReasons.NewUnknownFlagEvent(expected.Key, user, expected.Default, expected.Reason)

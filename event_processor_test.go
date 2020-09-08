@@ -70,7 +70,7 @@ func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -85,7 +85,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, TrackEvents: true}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -103,7 +103,7 @@ func TestUserDetailsAreScrubbedInIndexEvent(t *testing.T) {
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, TrackEvents: true}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -121,7 +121,7 @@ func TestFeatureEventCanContainInlineUser(t *testing.T) {
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, TrackEvents: true}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -139,7 +139,7 @@ func TestUserDetailsAreScrubbedInFeatureEvent(t *testing.T) {
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, TrackEvents: true}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -156,7 +156,7 @@ func TestFeatureEventCanContainReason(t *testing.T) {
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, TrackEvents: true}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	fe.Reason = ldreason.NewEvalReasonFallthrough()
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
@@ -174,7 +174,7 @@ func TestIndexEventIsGeneratedForNonTrackedFeatureEventEvenIfInliningIsOn(t *tes
 
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11}
 	value := ldvalue.String("value")
-	fe := defaultEventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := defaultEventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -195,7 +195,7 @@ func TestDebugEventIsAddedIfFlagIsTemporarilyInDebugMode(t *testing.T) {
 	futureTime := fakeTimeNow + 100
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, DebugEventsUntilDate: futureTime}
 	value := ldvalue.String("value")
-	fe := eventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := eventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -217,7 +217,7 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 	futureTime := fakeTimeNow + 100
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, TrackEvents: true, DebugEventsUntilDate: futureTime}
 	value := ldvalue.String("value")
-	fe := eventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe := eventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -251,12 +251,12 @@ func TestDebugModeExpiresBasedOnClientTimeIfClientTimeIsLater(t *testing.T) {
 	// the future than the server time, but in the past compared to the client.
 	debugUntil := serverTime + 1000
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, DebugEventsUntilDate: debugUntil}
-	fe := eventFactory.NewSuccessfulEvalEvent(flag, epDefaultUser, -1, ldvalue.Null(), ldvalue.Null(), noReason, "")
+	fe := eventFactory.NewEvalEvent(flag, epDefaultUser, ldreason.NewEvaluationDetail(ldvalue.Null(), 0, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
 	// should get a summary event only, not a debug event
-	assertSummaryEventHasCounter(t, flag, -1, ldvalue.Null(), 1, es.awaitEvent(t))
+	assertSummaryEventHasCounter(t, flag, 0, ldvalue.Null(), 1, es.awaitEvent(t))
 	es.assertNoMoreEvents(t)
 }
 
@@ -283,12 +283,12 @@ func TestDebugModeExpiresBasedOnServerTimeIfServerTimeIsLater(t *testing.T) {
 	// the future than the client time, but in the past compared to the server.
 	debugUntil := serverTime - 1000
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 11, DebugEventsUntilDate: debugUntil}
-	fe := eventFactory.NewSuccessfulEvalEvent(&flag, epDefaultUser, -1, ldvalue.Null(), ldvalue.Null(), noReason, "")
+	fe := eventFactory.NewEvalEvent(&flag, epDefaultUser, ldreason.NewEvaluationDetail(ldvalue.Null(), 0, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
 	// should get a summary event only, not a debug event
-	assertSummaryEventHasCounter(t, flag, -1, ldvalue.Null(), 1, es.awaitEvent(t))
+	assertSummaryEventHasCounter(t, flag, 0, ldvalue.Null(), 1, es.awaitEvent(t))
 	es.assertNoMoreEvents(t)
 }
 
@@ -299,8 +299,8 @@ func TestTwoFeatureEventsForSameUserGenerateOnlyOneIndexEvent(t *testing.T) {
 	flag1 := flagEventPropertiesImpl{Key: "flagkey1", Version: 11, TrackEvents: true}
 	flag2 := flagEventPropertiesImpl{Key: "flagkey2", Version: 22, TrackEvents: true}
 	value := ldvalue.String("value")
-	fe1 := defaultEventFactory.NewSuccessfulEvalEvent(flag1, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
-	fe2 := defaultEventFactory.NewSuccessfulEvalEvent(flag2, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
+	fe1 := defaultEventFactory.NewEvalEvent(flag1, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
+	fe2 := defaultEventFactory.NewEvalEvent(flag2, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe1)
 	ep.RecordFeatureRequestEvent(fe2)
 	ep.Flush()
@@ -321,9 +321,9 @@ func TestNonTrackedEventsAreSummarized(t *testing.T) {
 	flag1 := flagEventPropertiesImpl{Key: "flagkey1", Version: 11}
 	flag2 := flagEventPropertiesImpl{Key: "flagkey2", Version: 22}
 	value := ldvalue.String("value")
-	fe1 := defaultEventFactory.NewSuccessfulEvalEvent(flag1, epDefaultUser, 2, value, ldvalue.Null(), noReason, "")
-	fe2 := defaultEventFactory.NewSuccessfulEvalEvent(flag2, epDefaultUser, 3, value, ldvalue.Null(), noReason, "")
-	fe3 := defaultEventFactory.NewSuccessfulEvalEvent(flag2, epDefaultUser, 3, value, ldvalue.Null(), noReason, "")
+	fe1 := defaultEventFactory.NewEvalEvent(flag1, epDefaultUser, ldreason.NewEvaluationDetail(value, 2, noReason), ldvalue.Null(), "")
+	fe2 := defaultEventFactory.NewEvalEvent(flag2, epDefaultUser, ldreason.NewEvaluationDetail(value, 3, noReason), ldvalue.Null(), "")
+	fe3 := defaultEventFactory.NewEvalEvent(flag2, epDefaultUser, ldreason.NewEvaluationDetail(value, 3, noReason), ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe1)
 	ep.RecordFeatureRequestEvent(fe2)
 	ep.RecordFeatureRequestEvent(fe3)
@@ -701,8 +701,8 @@ func expectedFeatureEvent(sourceEvent FeatureRequestEvent, flag FlagEventPropert
 		Set("version", ldvalue.Int(flag.GetVersion())).
 		Set("value", value).
 		Set("default", ldvalue.Null())
-	if sourceEvent.Variation != NoVariation {
-		expected.Set("variation", ldvalue.Int(sourceEvent.Variation))
+	if sourceEvent.Variation.IsDefined() {
+		expected.Set("variation", ldvalue.Int(sourceEvent.Variation.IntValue()))
 	}
 	if sourceEvent.Reason.GetKind() != "" {
 		expected.Set("reason", jsonEncoding(sourceEvent.Reason))

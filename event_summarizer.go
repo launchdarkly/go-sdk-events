@@ -21,8 +21,8 @@ type eventSummary struct {
 
 type counterKey struct {
 	key       string
-	variation int
-	version   int
+	variation ldvalue.OptionalInt
+	version   ldvalue.OptionalInt
 }
 
 type counterValue struct {
