@@ -7,13 +7,6 @@ import (
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
 
-const (
-	// NoVariation is the value of an evaluation event's Variation if the evaluation failed.
-	NoVariation = -1
-	// NoVersion is the value of an evaluation event's Version if the flag was unknown.
-	NoVersion = -1
-)
-
 // EventUser is a combination of the standard User struct with additional information that may
 // be relevant outside of the standard SDK event generation context.
 //
@@ -53,10 +46,10 @@ type BaseEvent struct {
 type FeatureRequestEvent struct {
 	BaseEvent
 	Key                  string
-	Variation            int
+	Variation            ldvalue.OptionalInt
 	Value                ldvalue.Value
 	Default              ldvalue.Value
-	Version              int
+	Version              ldvalue.OptionalInt
 	PrereqOf             ldvalue.OptionalString
 	Reason               ldreason.EvaluationReason
 	TrackEvents          bool
@@ -116,11 +109,9 @@ func (f EventFactory) NewUnknownFlagEvent(
 			CreationDate: f.timeFn(),
 			User:         user,
 		},
-		Key:       key,
-		Variation: NoVariation,
-		Value:     defaultVal,
-		Default:   defaultVal,
-		Version:   NoVersion,
+		Key:     key,
+		Value:   defaultVal,
+		Default: defaultVal,
 	}
 	if f.includeReasons {
 		fre.Reason = reason
@@ -128,31 +119,30 @@ func (f EventFactory) NewUnknownFlagEvent(
 	return fre
 }
 
-// NewSuccessfulEvalEvent creates an evaluation event.
-func (f EventFactory) NewSuccessfulEvalEvent(
+// NewEvalEvent creates an evaluation event for an existing flag.
+func (f EventFactory) NewEvalEvent(
 	flagProps FlagEventProperties,
 	user EventUser,
-	variation int,
-	value, defaultVal ldvalue.Value,
-	reason ldreason.EvaluationReason,
+	detail ldreason.EvaluationDetail,
+	defaultVal ldvalue.Value,
 	prereqOf string,
 ) FeatureRequestEvent {
-	requireExperimentData := flagProps.IsExperimentationEnabled(reason)
+	requireExperimentData := flagProps.IsExperimentationEnabled(detail.Reason)
 	fre := FeatureRequestEvent{
 		BaseEvent: BaseEvent{
 			CreationDate: f.timeFn(),
 			User:         user,
 		},
 		Key:                  flagProps.GetKey(),
-		Version:              flagProps.GetVersion(),
-		Variation:            variation,
-		Value:                value,
+		Version:              ldvalue.NewOptionalInt(flagProps.GetVersion()),
+		Variation:            detail.VariationIndex,
+		Value:                detail.Value,
 		Default:              defaultVal,
 		TrackEvents:          requireExperimentData || flagProps.IsFullEventTrackingEnabled(),
 		DebugEventsUntilDate: flagProps.GetDebugEventsUntilDate(),
 	}
 	if f.includeReasons || requireExperimentData {
-		fre.Reason = reason
+		fre.Reason = detail.Reason
 	}
 	if prereqOf != "" {
 		fre.PrereqOf = ldvalue.NewOptionalString(prereqOf)

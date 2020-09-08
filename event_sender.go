@@ -85,14 +85,14 @@ func (s *defaultEventSender) SendEventData(kind EventDataKind, data []byte, even
 	switch kind {
 	case AnalyticsEventDataKind:
 		uri = s.eventsURI
-		description = "diagnostic event"
+		description = fmt.Sprintf("%d events", eventCount)
 		headers.Add(eventSchemaHeader, currentEventSchema)
 		payloadUUID, _ := uuid.NewRandom()
 		headers.Add(payloadIDHeader, payloadUUID.String())
 		// if NewRandom somehow failed, we'll just proceed with an empty string
 	case DiagnosticEventDataKind:
 		uri = s.diagnosticURI
-		description = fmt.Sprintf("%d events", eventCount)
+		description = "diagnostic event"
 	default:
 		return EventSenderResult{}
 	}
@@ -107,7 +107,7 @@ func (s *defaultEventSender) SendEventData(kind EventDataKind, data []byte, even
 			if delay == 0 {
 				delay = time.Second // COVERAGE: unit tests always set a short delay
 			}
-			s.loggers.Warnf("Will retry posting events after %f second", delay/time.Second)
+			s.loggers.Warnf("Will retry posting events after %f second", float64(delay/time.Second))
 			time.Sleep(delay)
 		}
 		req, reqErr := http.NewRequest("POST", uri, bytes.NewReader(data))

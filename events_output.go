@@ -56,9 +56,9 @@ func (ef eventOutputFormatter) writeOutputEvent(b *jsonstream.JSONBuffer, evt Ev
 		beginEventFields(b, kind, evt.BaseEvent.CreationDate)
 		b.WriteName("key")
 		b.WriteString(evt.Key)
-		if evt.Version != NoVersion {
+		if evt.Version.IsDefined() {
 			b.WriteName("version")
-			b.WriteInt(evt.Version)
+			b.WriteInt(evt.Version.IntValue())
 		}
 		if ef.config.InlineUsersInEvents || evt.Debug {
 			b.WriteName("user")
@@ -67,9 +67,9 @@ func (ef eventOutputFormatter) writeOutputEvent(b *jsonstream.JSONBuffer, evt Ev
 			b.WriteName("userKey")
 			b.WriteString(evt.User.GetKey())
 		}
-		if evt.Variation != NoVariation {
+		if evt.Variation.IsDefined() {
 			b.WriteName("variation")
-			b.WriteInt(evt.Variation)
+			b.WriteInt(evt.Variation.IntValue())
 		}
 		b.WriteName("value")
 		evt.Value.WriteToJSONBuffer(b)
@@ -185,13 +185,13 @@ func (ef eventOutputFormatter) writeSummaryEvent(b *jsonstream.JSONBuffer, snaps
 			}
 
 			b.BeginObject()
-			if anotherKey.variation >= 0 {
+			if anotherKey.variation.IsDefined() {
 				b.WriteName("variation")
-				b.WriteInt(anotherKey.variation)
+				b.WriteInt(anotherKey.variation.IntValue())
 			}
-			if anotherKey.version >= 0 {
+			if anotherKey.version.IsDefined() {
 				b.WriteName("version")
-				b.WriteInt(anotherKey.version)
+				b.WriteInt(anotherKey.version.IntValue())
 			} else {
 				b.WriteName("unknown")
 				b.WriteBool(true)

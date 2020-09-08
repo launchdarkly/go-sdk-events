@@ -11,8 +11,10 @@ import (
 )
 
 var user = EventUser{lduser.NewUser("key"), nil}
+var undefInt = ldvalue.OptionalInt{}
 
-func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string, flagVersion int, variation int, value, defaultValue string) FeatureRequestEvent {
+func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string,
+	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) FeatureRequestEvent {
 	return FeatureRequestEvent{
 		BaseEvent: BaseEvent{CreationDate: creationDate, User: user},
 		Key:       flagKey,
@@ -26,9 +28,9 @@ func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string, flag
 func TestSummarizeEventSetsStartAndEndDates(t *testing.T) {
 	es := newEventSummarizer()
 	flagKey := "key"
-	event1 := makeEvalEvent(2000, flagKey, 1, 0, "", "")
-	event2 := makeEvalEvent(1000, flagKey, 1, 0, "", "")
-	event3 := makeEvalEvent(1500, flagKey, 1, 0, "", "")
+	event1 := makeEvalEvent(2000, flagKey, ldvalue.NewOptionalInt(1), ldvalue.NewOptionalInt(0), "", "")
+	event2 := makeEvalEvent(1000, flagKey, ldvalue.NewOptionalInt(1), ldvalue.NewOptionalInt(0), "", "")
+	event3 := makeEvalEvent(1500, flagKey, ldvalue.NewOptionalInt(1), ldvalue.NewOptionalInt(0), "", "")
 	es.summarizeEvent(event1)
 	es.summarizeEvent(event2)
 	es.summarizeEvent(event3)
@@ -42,17 +44,18 @@ func TestSummarizeEventIncrementsCounters(t *testing.T) {
 	es := newEventSummarizer()
 	flagKey1 := "key1"
 	flagKey2 := "key2"
-	flagVersion1 := 11
-	flagVersion2 := 22
+	flagVersion1 := ldvalue.NewOptionalInt(11)
+	flagVersion2 := ldvalue.NewOptionalInt(22)
 
 	unknownFlagKey := "badkey"
-	variation1 := 1
-	variation2 := 2
+	variation1 := ldvalue.NewOptionalInt(1)
+	variation2 := ldvalue.NewOptionalInt(2)
 	event1 := makeEvalEvent(0, flagKey1, flagVersion1, variation1, "value1", "default1")
 	event2 := makeEvalEvent(0, flagKey1, flagVersion1, variation2, "value2", "default1")
 	event3 := makeEvalEvent(0, flagKey2, flagVersion2, variation1, "value99", "default2")
 	event4 := makeEvalEvent(0, flagKey1, flagVersion1, variation1, "value1", "default1")
-	event5 := makeEvalEvent(0, unknownFlagKey, NoVersion, NoVariation, "default3", "default3")
+	event5 := makeEvalEvent(0, unknownFlagKey, undefInt, undefInt, "default3", "default3")
+
 	es.summarizeEvent(event1)
 	es.summarizeEvent(event2)
 	es.summarizeEvent(event3)
@@ -61,10 +64,10 @@ func TestSummarizeEventIncrementsCounters(t *testing.T) {
 	data := es.snapshot()
 
 	expectedCounters := map[counterKey]*counterValue{
-		counterKey{flagKey1, variation1, flagVersion1}:     &counterValue{2, ldvalue.String("value1"), ldvalue.String("default1")},
-		counterKey{flagKey1, variation2, flagVersion1}:     &counterValue{1, ldvalue.String("value2"), ldvalue.String("default1")},
-		counterKey{flagKey2, variation1, flagVersion2}:     &counterValue{1, ldvalue.String("value99"), ldvalue.String("default2")},
-		counterKey{unknownFlagKey, NoVariation, NoVersion}: &counterValue{1, ldvalue.String("default3"), ldvalue.String("default3")},
+		counterKey{flagKey1, variation1, flagVersion1}: &counterValue{2, ldvalue.String("value1"), ldvalue.String("default1")},
+		counterKey{flagKey1, variation2, flagVersion1}: &counterValue{1, ldvalue.String("value2"), ldvalue.String("default1")},
+		counterKey{flagKey2, variation1, flagVersion2}: &counterValue{1, ldvalue.String("value99"), ldvalue.String("default2")},
+		counterKey{unknownFlagKey, undefInt, undefInt}: &counterValue{1, ldvalue.String("default3"), ldvalue.String("default3")},
 	}
 	assert.Equal(t, expectedCounters, data.counters)
 }
@@ -72,12 +75,12 @@ func TestSummarizeEventIncrementsCounters(t *testing.T) {
 func TestCounterForNilVariationIsDistinctFromOthers(t *testing.T) {
 	es := newEventSummarizer()
 	flagKey := "key1"
-	flagVersion := 11
-	variation1 := 1
-	variation2 := 2
+	flagVersion := ldvalue.NewOptionalInt(11)
+	variation1 := ldvalue.NewOptionalInt(1)
+	variation2 := ldvalue.NewOptionalInt(2)
 	event1 := makeEvalEvent(0, flagKey, flagVersion, variation1, "value1", "default1")
 	event2 := makeEvalEvent(0, flagKey, flagVersion, variation2, "value2", "default1")
-	event3 := makeEvalEvent(0, flagKey, flagVersion, NoVariation, "default1", "default1")
+	event3 := makeEvalEvent(0, flagKey, flagVersion, undefInt, "default1", "default1")
 	es.summarizeEvent(event1)
 	es.summarizeEvent(event2)
 	es.summarizeEvent(event3)
@@ -86,7 +89,7 @@ func TestCounterForNilVariationIsDistinctFromOthers(t *testing.T) {
 	expectedCounters := map[counterKey]*counterValue{
 		counterKey{flagKey, variation1, flagVersion}: &counterValue{1, ldvalue.String("value1"), ldvalue.String("default1")},
 		counterKey{flagKey, variation2, flagVersion}: &counterValue{1, ldvalue.String("value2"), ldvalue.String("default1")},
-		counterKey{flagKey, -1, flagVersion}:         &counterValue{1, ldvalue.String("default1"), ldvalue.String("default1")},
+		counterKey{flagKey, undefInt, flagVersion}:   &counterValue{1, ldvalue.String("default1"), ldvalue.String("default1")},
 	}
 	assert.Equal(t, expectedCounters, data.counters)
 }
