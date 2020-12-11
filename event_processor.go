@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
+	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
@@ -362,12 +362,9 @@ func runFlushTask(config EventsConfiguration, flushCh <-chan *flushPayload,
 			break
 		}
 		if !payload.diagnosticEvent.IsNull() {
-			var buf jsonstream.JSONBuffer
-			payload.diagnosticEvent.WriteToJSONBuffer(&buf)
-			bytes, _ := buf.Get()
-			// Disregarding error return from json.Marshal because the type we're marshaling, ldvalue.Value,
-			// cannot fail to marshal unless something is broken in the Value or JSONBuffer implementations -
-			// which we test separately in go-sdk-common.
+			w := jwriter.NewWriter()
+			payload.diagnosticEvent.WriteToJSONWriter(&w)
+			bytes := w.Bytes()
 			_ = config.EventSender.SendEventData(DiagnosticEventDataKind, bytes, 1)
 		} else {
 			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)

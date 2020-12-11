@@ -1,7 +1,7 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
+	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
@@ -28,68 +28,65 @@ func newUserFilter(config EventsConfiguration) userFilter {
 // If neither the configuration nor the user specifies any private attributes, then this is the same
 // as the original user. Otherwise, it is a copy which may have some attributes removed (with the
 // PrivateAttributes property set to a list of their names).
-func (uf *userFilter) writeUser(b *jsonstream.JSONBuffer, user EventUser) {
-	b.BeginObject()
+func (uf *userFilter) writeUser(w *jwriter.Writer, user EventUser) {
+	obj := w.Object()
 
-	b.WriteName("key")
-	b.WriteString(user.GetKey())
+	obj.String("key", user.GetKey())
 
 	var privateAttrsPreallocateArray [30]string // lets us avoid heap allocation in typical cases
 	var privateAttrs = privateAttrsPreallocateArray[0:0]
 
-	uf.maybeStringAttribute(b, &user, lduser.SecondaryKeyAttribute, user.GetSecondaryKey(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.IPAttribute, user.GetIP(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.CountryAttribute, user.GetCountry(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.EmailAttribute, user.GetEmail(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.LastNameAttribute, user.GetLastName(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.FirstNameAttribute, user.GetFirstName(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.AvatarAttribute, user.GetAvatar(), &privateAttrs)
-	uf.maybeStringAttribute(b, &user, lduser.NameAttribute, user.GetName(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.SecondaryKeyAttribute, user.GetSecondaryKey(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.IPAttribute, user.GetIP(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.CountryAttribute, user.GetCountry(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.EmailAttribute, user.GetEmail(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.LastNameAttribute, user.GetLastName(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.FirstNameAttribute, user.GetFirstName(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.AvatarAttribute, user.GetAvatar(), &privateAttrs)
+	uf.maybeStringAttribute(&obj, &user, lduser.NameAttribute, user.GetName(), &privateAttrs)
 
 	if anon, hasAnon := user.GetAnonymousOptional(); hasAnon {
-		b.WriteName(string(lduser.AnonymousAttribute))
-		b.WriteBool(anon)
+		obj.Bool(string(lduser.AnonymousAttribute), anon)
 	}
 
 	custom := user.GetAllCustom()
 	wroteCustom := false
+	var customObj jwriter.ObjectState
 	if custom.Count() > 0 {
 		custom.Enumerate(func(i int, key string, value ldvalue.Value) bool {
 			if uf.isPrivate(&user, lduser.UserAttribute(key)) {
 				privateAttrs = append(privateAttrs, key)
 			} else {
 				if !wroteCustom {
-					b.WriteName("custom")
-					b.BeginObject()
+					customObj = obj.Object("custom")
 					wroteCustom = true
 				}
-				b.WriteName(key)
-				value.WriteToJSONBuffer(b)
+				customObj.Property(key)
+				value.WriteToJSONWriter(w)
 			}
 			return true
 		})
 	}
 	if wroteCustom {
-		b.EndObject()
+		customObj.End()
 	}
 
 	if user.AlreadyFilteredAttributes != nil {
 		privateAttrs = user.AlreadyFilteredAttributes
 	}
 	if len(privateAttrs) > 0 {
-		b.WriteName("privateAttrs")
-		b.BeginArray()
+		attrsArr := obj.Array("privateAttrs")
 		for _, a := range privateAttrs {
-			b.WriteString(a)
+			attrsArr.String(a)
 		}
-		b.EndArray()
+		attrsArr.End()
 	}
 
-	b.EndObject()
+	obj.End()
 }
 
 func (uf *userFilter) maybeStringAttribute(
-	b *jsonstream.JSONBuffer,
+	obj *jwriter.ObjectState,
 	user *EventUser,
 	attrName lduser.UserAttribute,
 	value ldvalue.OptionalString,
@@ -98,8 +95,7 @@ func (uf *userFilter) maybeStringAttribute(
 		if uf.isPrivate(user, attrName) {
 			*privateAttrs = append(*privateAttrs, string(attrName))
 		} else {
-			b.WriteName(string(attrName))
-			b.WriteString(s)
+			obj.String(string(attrName), s)
 		}
 	}
 }
