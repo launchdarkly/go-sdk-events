@@ -5,14 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
-
-	"github.com/stretchr/testify/assert"
-
+	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var epDefaultConfig = EventsConfiguration{
@@ -658,12 +657,12 @@ func jsonEncoding(o interface{}) ldvalue.Value {
 
 func userJsonEncoding(u EventUser) ldvalue.Value {
 	filter := newUserFilter(epDefaultConfig)
-	var b jsonstream.JSONBuffer
-	filter.writeUser(&b, u)
-	bytes, err := b.Get()
-	if err != nil {
+	w := jwriter.NewWriter()
+	filter.writeUser(&w, u)
+	if err := w.Error(); err != nil {
 		panic(err)
 	}
+	bytes := w.Bytes()
 	var result ldvalue.Value
 	if err := json.Unmarshal(bytes, &result); err != nil {
 		panic(err)
