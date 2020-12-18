@@ -54,71 +54,61 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
 			kind = FeatureDebugEventKind
 		}
 		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
-		obj.String("key", evt.Key)
-		obj.OptInt("version", evt.Version.IsDefined(), evt.Version.IntValue())
+		obj.Name("key").String(evt.Key)
+		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
 		if ef.config.InlineUsersInEvents || evt.Debug {
-			obj.Property("user")
-			ef.userFilter.writeUser(w, evt.User)
+			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
-			obj.String("userKey", evt.User.GetKey())
+			obj.Name("userKey").String(evt.User.GetKey())
 		}
-		obj.OptInt("variation", evt.Variation.IsDefined(), evt.Variation.IntValue())
-		obj.Property("value")
-		evt.Value.WriteToJSONWriter(w)
-		obj.Property("default")
-		evt.Default.WriteToJSONWriter(w)
-		obj.OptString("prereqOf", evt.PrereqOf.IsDefined(), evt.PrereqOf.StringValue())
+		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
+		evt.Value.WriteToJSONWriter(obj.Name("value"))
+		evt.Default.WriteToJSONWriter(obj.Name("default"))
+		obj.Maybe("prereqOf", evt.PrereqOf.IsDefined()).String(evt.PrereqOf.StringValue())
 		if evt.Reason.GetKind() != "" {
-			obj.Property("reason")
-			evt.Reason.WriteToJSONWriter(w)
+			evt.Reason.WriteToJSONWriter(obj.Name("reason"))
 		}
 
 	case CustomEvent:
 		beginEventFields(&obj, CustomEventKind, evt.BaseEvent.CreationDate)
-		obj.String("key", evt.Key)
+		obj.Name("key").String(evt.Key)
 		if !evt.Data.IsNull() {
-			obj.Property("data")
-			evt.Data.WriteToJSONWriter(w)
+			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
 		if ef.config.InlineUsersInEvents {
-			obj.Property("user")
-			ef.userFilter.writeUser(w, evt.User)
+			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
-			obj.String("userKey", evt.User.GetKey())
+			obj.Name("userKey").String(evt.User.GetKey())
 		}
-		if evt.HasMetric {
-			obj.Float64("metricValue", evt.MetricValue)
-		}
+		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
 	case IdentifyEvent:
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
-		obj.String("key", evt.User.GetKey())
-		obj.Property("user")
-		ef.userFilter.writeUser(w, evt.User)
+		obj.Name("key").String(evt.User.GetKey())
+		ef.userFilter.writeUser(obj.Name("user"), evt.User)
 
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
-		obj.Property("user")
-		ef.userFilter.writeUser(w, evt.User)
+		ef.userFilter.writeUser(obj.Name("user"), evt.User)
 	}
 
 	obj.End()
 }
 
 func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime.UnixMillisecondTime) {
-	obj.String("kind", kind)
-	obj.Float64("creationDate", float64(creationDate))
+	obj.Name("kind").String(kind)
+	obj.Name("creationDate").Float64(float64(creationDate))
 }
 
 // Transforms the summary data into the format used for event sending.
 func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eventSummary) {
 	obj := w.Object()
 
-	obj.String("kind", SummaryEventKind)
-	obj.Float64("startDate", float64(snapshot.startDate))
-	obj.Float64("endDate", float64(snapshot.endDate))
+	obj.Name("kind").String(SummaryEventKind)
+	obj.Name("startDate").Float64(float64(snapshot.startDate))
+	obj.Name("endDate").Float64(float64(snapshot.endDate))
 
-	flagsObj := obj.Object("features")
+	flagsObj := obj.Name("features").Object()
 
 	// snapshot.counters contains composite keys in any order, part of which is the flag key; we want to group
 	// them together by flag key. The following multi-pass logic allows us to do this without using maps. It is
@@ -138,12 +128,11 @@ func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eve
 		flagKey := key.key
 		firstValue := snapshot.counters[key]
 
-		flagObj := flagsObj.Object(flagKey)
+		flagObj := flagsObj.Name(flagKey).Object()
 
-		flagObj.Property("default")
-		firstValue.flagDefault.WriteToJSONWriter(w)
+		firstValue.flagDefault.WriteToJSONWriter(flagObj.Name("default"))
 
-		countersArr := flagObj.Array("counters")
+		countersArr := flagObj.Name("counters").Array()
 
 		// Iterate over the remainder of the list to find any more entries for the same flag key.
 		for j := i; j < len(unprocessedKeys); j++ {
@@ -162,15 +151,14 @@ func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eve
 			}
 
 			counterObj := countersArr.Object()
-			counterObj.OptInt("variation", anotherKey.variation.IsDefined(), anotherKey.variation.IntValue())
+			counterObj.Maybe("variation", anotherKey.variation.IsDefined()).Int(anotherKey.variation.IntValue())
 			if anotherKey.version.IsDefined() {
-				counterObj.Int("version", anotherKey.version.IntValue())
+				counterObj.Name("version").Int(anotherKey.version.IntValue())
 			} else {
-				counterObj.Bool("unknown", true)
+				counterObj.Name("unknown").Bool(true)
 			}
-			counterObj.Property("value")
-			anotherValue.flagValue.WriteToJSONWriter(w)
-			counterObj.Int("count", anotherValue.count)
+			anotherValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
+			counterObj.Name("count").Int(anotherValue.count)
 			counterObj.End()
 		}
 

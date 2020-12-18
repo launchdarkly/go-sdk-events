@@ -31,7 +31,7 @@ func newUserFilter(config EventsConfiguration) userFilter {
 func (uf *userFilter) writeUser(w *jwriter.Writer, user EventUser) {
 	obj := w.Object()
 
-	obj.String("key", user.GetKey())
+	obj.Name("key").String(user.GetKey())
 
 	var privateAttrsPreallocateArray [30]string // lets us avoid heap allocation in typical cases
 	var privateAttrs = privateAttrsPreallocateArray[0:0]
@@ -46,7 +46,7 @@ func (uf *userFilter) writeUser(w *jwriter.Writer, user EventUser) {
 	uf.maybeStringAttribute(&obj, &user, lduser.NameAttribute, user.GetName(), &privateAttrs)
 
 	if anon, hasAnon := user.GetAnonymousOptional(); hasAnon {
-		obj.Bool(string(lduser.AnonymousAttribute), anon)
+		obj.Name(string(lduser.AnonymousAttribute)).Bool(anon)
 	}
 
 	custom := user.GetAllCustom()
@@ -58,11 +58,10 @@ func (uf *userFilter) writeUser(w *jwriter.Writer, user EventUser) {
 				privateAttrs = append(privateAttrs, key)
 			} else {
 				if !wroteCustom {
-					customObj = obj.Object("custom")
+					customObj = obj.Name("custom").Object()
 					wroteCustom = true
 				}
-				customObj.Property(key)
-				value.WriteToJSONWriter(w)
+				value.WriteToJSONWriter(customObj.Name(key))
 			}
 			return true
 		})
@@ -75,7 +74,7 @@ func (uf *userFilter) writeUser(w *jwriter.Writer, user EventUser) {
 		privateAttrs = user.AlreadyFilteredAttributes
 	}
 	if len(privateAttrs) > 0 {
-		attrsArr := obj.Array("privateAttrs")
+		attrsArr := obj.Name("privateAttrs").Array()
 		for _, a := range privateAttrs {
 			attrsArr.String(a)
 		}
@@ -95,7 +94,7 @@ func (uf *userFilter) maybeStringAttribute(
 		if uf.isPrivate(user, attrName) {
 			*privateAttrs = append(*privateAttrs, string(attrName))
 		} else {
-			obj.String(string(attrName), s)
+			obj.Name(string(attrName)).String(s)
 		}
 	}
 }
