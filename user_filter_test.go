@@ -5,12 +5,11 @@ import (
 	"sort"
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
-
-	"github.com/stretchr/testify/assert"
-
+	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var optionalStringSetters = map[lduser.UserAttribute]func(lduser.UserBuilder, string) lduser.UserBuilderCanMakeAttributePrivate{
@@ -55,12 +54,12 @@ func getAllPrivatableAttributeNames() []string {
 }
 
 func makeUserOutput(uf userFilter, u EventUser) ldvalue.Value {
-	var b jsonstream.JSONBuffer
-	uf.writeUser(&b, u)
-	bytes, err := b.Get()
-	if err != nil {
+	w := jwriter.NewWriter()
+	uf.writeUser(&w, u)
+	if err := w.Error(); err != nil {
 		panic(err)
 	}
+	bytes := w.Bytes()
 	var v ldvalue.Value
 	if err := json.Unmarshal(bytes, &v); err != nil {
 		panic(err)

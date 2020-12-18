@@ -1,7 +1,7 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v2/jsonstream"
+	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 )
 
@@ -25,27 +25,27 @@ type eventOutputFormatter struct {
 
 func (ef eventOutputFormatter) makeOutputEvents(events []Event, summary eventSummary) ([]byte, int) {
 	n := len(events)
-	var b jsonstream.JSONBuffer
-	b.BeginArray()
+
+	w := jwriter.NewWriter()
+	arr := w.Array()
 
 	for _, e := range events {
-		ef.writeOutputEvent(&b, e)
+		ef.writeOutputEvent(&w, e)
 	}
 	if len(summary.counters) > 0 {
-		ef.writeSummaryEvent(&b, summary)
+		ef.writeSummaryEvent(&w, summary)
 		n++
 	}
 
 	if n > 0 {
-		b.EndArray()
-		bytes, _ := b.Get()
-		return bytes, n
+		arr.End()
+		return w.Bytes(), n
 	}
 	return nil, 0
 }
 
-func (ef eventOutputFormatter) writeOutputEvent(b *jsonstream.JSONBuffer, evt Event) {
-	b.BeginObject()
+func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
+	obj := w.Object()
 
 	switch evt := evt.(type) {
 	case FeatureRequestEvent:
@@ -53,93 +53,62 @@ func (ef eventOutputFormatter) writeOutputEvent(b *jsonstream.JSONBuffer, evt Ev
 		if evt.Debug {
 			kind = FeatureDebugEventKind
 		}
-		beginEventFields(b, kind, evt.BaseEvent.CreationDate)
-		b.WriteName("key")
-		b.WriteString(evt.Key)
-		if evt.Version.IsDefined() {
-			b.WriteName("version")
-			b.WriteInt(evt.Version.IntValue())
-		}
+		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
+		obj.Name("key").String(evt.Key)
+		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
 		if ef.config.InlineUsersInEvents || evt.Debug {
-			b.WriteName("user")
-			ef.userFilter.writeUser(b, evt.User)
+			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
-			b.WriteName("userKey")
-			b.WriteString(evt.User.GetKey())
+			obj.Name("userKey").String(evt.User.GetKey())
 		}
-		if evt.Variation.IsDefined() {
-			b.WriteName("variation")
-			b.WriteInt(evt.Variation.IntValue())
-		}
-		b.WriteName("value")
-		evt.Value.WriteToJSONBuffer(b)
-		b.WriteName("default")
-		evt.Default.WriteToJSONBuffer(b)
-		if pre, ok := evt.PrereqOf.Get(); ok {
-			b.WriteName("prereqOf")
-			b.WriteString(pre)
-		}
+		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
+		evt.Value.WriteToJSONWriter(obj.Name("value"))
+		evt.Default.WriteToJSONWriter(obj.Name("default"))
+		obj.Maybe("prereqOf", evt.PrereqOf.IsDefined()).String(evt.PrereqOf.StringValue())
 		if evt.Reason.GetKind() != "" {
-			b.WriteName("reason")
-			evt.Reason.WriteToJSONBuffer(b)
+			evt.Reason.WriteToJSONWriter(obj.Name("reason"))
 		}
 
 	case CustomEvent:
-		beginEventFields(b, CustomEventKind, evt.BaseEvent.CreationDate)
-		b.WriteName("key")
-		b.WriteString(evt.Key)
+		beginEventFields(&obj, CustomEventKind, evt.BaseEvent.CreationDate)
+		obj.Name("key").String(evt.Key)
 		if !evt.Data.IsNull() {
-			b.WriteName("data")
-			evt.Data.WriteToJSONBuffer(b)
+			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
 		if ef.config.InlineUsersInEvents {
-			b.WriteName("user")
-			ef.userFilter.writeUser(b, evt.User)
+			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
-			b.WriteName("userKey")
-			b.WriteString(evt.User.GetKey())
+			obj.Name("userKey").String(evt.User.GetKey())
 		}
-		if evt.HasMetric {
-			b.WriteName("metricValue")
-			b.WriteFloat64(evt.MetricValue)
-		}
+		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
 	case IdentifyEvent:
-		beginEventFields(b, IdentifyEventKind, evt.BaseEvent.CreationDate)
-		b.WriteName("key")
-		b.WriteString(evt.User.GetKey())
-		b.WriteName("user")
-		ef.userFilter.writeUser(b, evt.User)
+		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
+		obj.Name("key").String(evt.User.GetKey())
+		ef.userFilter.writeUser(obj.Name("user"), evt.User)
 
 	case indexEvent:
-		beginEventFields(b, IndexEventKind, evt.BaseEvent.CreationDate)
-		b.WriteName("user")
-		ef.userFilter.writeUser(b, evt.User)
+		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
+		ef.userFilter.writeUser(obj.Name("user"), evt.User)
 	}
 
-	b.EndObject()
+	obj.End()
 }
 
-func beginEventFields(b *jsonstream.JSONBuffer, kind string, creationDate ldtime.UnixMillisecondTime) {
-	b.WriteName("kind")
-	b.WriteString(kind)
-	b.WriteName("creationDate")
-	b.WriteUint64(uint64(creationDate))
+func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime.UnixMillisecondTime) {
+	obj.Name("kind").String(kind)
+	obj.Name("creationDate").Float64(float64(creationDate))
 }
 
 // Transforms the summary data into the format used for event sending.
-func (ef eventOutputFormatter) writeSummaryEvent(b *jsonstream.JSONBuffer, snapshot eventSummary) {
-	b.BeginObject()
+func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eventSummary) {
+	obj := w.Object()
 
-	b.WriteName("kind")
-	b.WriteString(SummaryEventKind)
-	b.WriteName("startDate")
-	b.WriteUint64(uint64(snapshot.startDate))
-	b.WriteName("endDate")
-	b.WriteUint64(uint64(snapshot.endDate))
+	obj.Name("kind").String(SummaryEventKind)
+	obj.Name("startDate").Float64(float64(snapshot.startDate))
+	obj.Name("endDate").Float64(float64(snapshot.endDate))
 
-	b.WriteName("features")
-	b.BeginObject()
+	flagsObj := obj.Name("features").Object()
 
 	// snapshot.counters contains composite keys in any order, part of which is the flag key; we want to group
 	// them together by flag key. The following multi-pass logic allows us to do this without using maps. It is
@@ -159,14 +128,11 @@ func (ef eventOutputFormatter) writeSummaryEvent(b *jsonstream.JSONBuffer, snaps
 		flagKey := key.key
 		firstValue := snapshot.counters[key]
 
-		b.WriteName(flagKey)
-		b.BeginObject()
+		flagObj := flagsObj.Name(flagKey).Object()
 
-		b.WriteName("default")
-		firstValue.flagDefault.WriteToJSONBuffer(b)
+		firstValue.flagDefault.WriteToJSONWriter(flagObj.Name("default"))
 
-		b.WriteName("counters")
-		b.BeginArray()
+		countersArr := flagObj.Name("counters").Array()
 
 		// Iterate over the remainder of the list to find any more entries for the same flag key.
 		for j := i; j < len(unprocessedKeys); j++ {
@@ -184,28 +150,21 @@ func (ef eventOutputFormatter) writeSummaryEvent(b *jsonstream.JSONBuffer, snaps
 				unprocessedKeys[j].key = "" // clear this one so we'll skip it in the next pass
 			}
 
-			b.BeginObject()
-			if anotherKey.variation.IsDefined() {
-				b.WriteName("variation")
-				b.WriteInt(anotherKey.variation.IntValue())
-			}
+			counterObj := countersArr.Object()
+			counterObj.Maybe("variation", anotherKey.variation.IsDefined()).Int(anotherKey.variation.IntValue())
 			if anotherKey.version.IsDefined() {
-				b.WriteName("version")
-				b.WriteInt(anotherKey.version.IntValue())
+				counterObj.Name("version").Int(anotherKey.version.IntValue())
 			} else {
-				b.WriteName("unknown")
-				b.WriteBool(true)
+				counterObj.Name("unknown").Bool(true)
 			}
-			b.WriteName("value")
-			anotherValue.flagValue.WriteToJSONBuffer(b)
-			b.WriteName("count")
-			b.WriteInt(anotherValue.count)
-			b.EndObject() // end of this counter
+			anotherValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
+			counterObj.Name("count").Int(anotherValue.count)
+			counterObj.End()
 		}
 
-		b.EndArray()  // end of "counters" array
-		b.EndObject() // end of this flag
+		countersArr.End()
+		flagObj.End()
 	}
-	b.EndObject() // end of "features"
-	b.EndObject() // end of summary event
+	flagsObj.End()
+	obj.End()
 }
