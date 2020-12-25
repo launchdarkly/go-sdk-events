@@ -13,6 +13,8 @@ func (n nullEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {}
 
 func (n nullEventProcessor) RecordCustomEvent(e CustomEvent) {}
 
+func (n nullEventProcessor) RecordAliasEvent(e AliasEvent) {}
+
 func (n nullEventProcessor) Flush() {}
 
 func (n nullEventProcessor) Close() error {

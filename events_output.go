@@ -14,6 +14,7 @@ const (
 	FeatureDebugEventKind   = "debug"
 	CustomEventKind         = "custom"
 	IdentifyEventKind       = "identify"
+	AliasEventKind          = "alias"
 	IndexEventKind          = "index"
 	SummaryEventKind        = "summary"
 )
@@ -23,7 +24,7 @@ type eventOutputFormatter struct {
 	config     EventsConfiguration
 }
 
-func (ef eventOutputFormatter) makeOutputEvents(events []Event, summary eventSummary) ([]byte, int) {
+func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary eventSummary) ([]byte, int) {
 	n := len(events)
 
 	w := jwriter.NewWriter()
@@ -44,7 +45,7 @@ func (ef eventOutputFormatter) makeOutputEvents(events []Event, summary eventSum
 	return nil, 0
 }
 
-func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
+func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEvent) {
 	obj := w.Object()
 
 	switch evt := evt.(type) {
@@ -56,6 +57,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
 		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
+		writeContextKind(&obj, evt.User.GetAnonymous())
 		if ef.config.InlineUsersInEvents || evt.Debug {
 			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
@@ -75,6 +77,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
 		if !evt.Data.IsNull() {
 			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
+		writeContextKind(&obj, evt.User.GetAnonymous())
 		if ef.config.InlineUsersInEvents {
 			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
@@ -87,6 +90,13 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
 		obj.Name("key").String(evt.User.GetKey())
 		ef.userFilter.writeUser(obj.Name("user"), evt.User)
 
+	case AliasEvent:
+		beginEventFields(&obj, AliasEventKind, evt.CreationDate)
+		obj.Name("key").String(evt.CurrentKey)
+		obj.Name("contextKind").String(evt.CurrentKind)
+		obj.Name("previousKey").String(evt.PreviousKey)
+		obj.Name("previousContextKind").String(evt.PreviousKind)
+
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
 		ef.userFilter.writeUser(obj.Name("user"), evt.User)
@@ -98,6 +108,10 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt Event) {
 func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime.UnixMillisecondTime) {
 	obj.Name("kind").String(kind)
 	obj.Name("creationDate").Float64(float64(creationDate))
+}
+
+func writeContextKind(obj *jwriter.ObjectState, anonymous bool) {
+	obj.Maybe("contextKind", anonymous).String("anonymousUser")
 }
 
 // Transforms the summary data into the format used for event sending.

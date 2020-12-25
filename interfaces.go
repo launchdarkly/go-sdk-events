@@ -18,6 +18,9 @@ type EventProcessor interface {
 	// RecordCustomEvent records a CustomEvent asynchronously.
 	RecordCustomEvent(CustomEvent)
 
+	// RecordAliasEvent records an AliasEvent asynchronously.
+	RecordAliasEvent(AliasEvent)
+
 	// Flush specifies that any buffered events should be sent as soon as possible, rather than waiting
 	// for the next flush interval. This method is asynchronous, so events still may not be sent
 	// until a later time.
