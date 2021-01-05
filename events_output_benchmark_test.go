@@ -41,7 +41,7 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 	}
 }
 
-func makeBasicEvents() []Event {
+func makeBasicEvents() []commonEvent {
 	baseEvent := BaseEvent{
 		CreationDate: ldtime.UnixMillisNow(),
 		User: EventUser{
@@ -52,7 +52,7 @@ func makeBasicEvents() []Event {
 				Build(),
 		},
 	}
-	return []Event{
+	return []commonEvent{
 		FeatureRequestEvent{
 			BaseEvent: baseEvent,
 			Key:       "flag1",

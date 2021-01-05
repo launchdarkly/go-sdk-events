@@ -33,7 +33,7 @@ type eventDispatcher struct {
 
 type flushPayload struct {
 	diagnosticEvent ldvalue.Value
-	events          []Event
+	events          []commonEvent
 	summary         eventSummary
 }
 
@@ -41,7 +41,7 @@ type flushPayload struct {
 type eventDispatcherMessage interface{}
 
 type sendEventMessage struct {
-	event Event
+	event commonEvent
 }
 
 type flushEventsMessage struct{}
@@ -77,6 +77,10 @@ func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {
 }
 
 func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEvent) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+}
+
+func (ep *defaultEventProcessor) RecordAliasEvent(e AliasEvent) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
@@ -225,12 +229,13 @@ func (ed *eventDispatcher) runMainLoop(
 	}
 }
 
-func (ed *eventDispatcher) processEvent(evt Event) {
+func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
-	var debugEvent Event
+	var debugEvent commonEvent
 	inlinedUser := ed.config.InlineUsersInEvents
+	var baseEvent Event
 	switch evt := evt.(type) {
 	case FeatureRequestEvent:
 		ed.outbox.addToSummary(evt) // add all feature events to summaries
@@ -240,21 +245,28 @@ func (ed *eventDispatcher) processEvent(evt Event) {
 			de.Debug = true
 			debugEvent = de
 		}
+		baseEvent = evt
 	case IdentifyEvent:
 		inlinedUser = true
+		baseEvent = evt
+	case CustomEvent:
+		baseEvent = evt
+	case AliasEvent:
+		ed.outbox.addEvent(evt)
 	}
-
+	if baseEvent == nil {
+		return
+	}
 	// For each user we haven't seen before, we add an index event before the event that referenced
 	// the user - unless the event must contain an inline user (i.e. if InlineUsersInEvents is true,
 	// or if it is an identify event).
-	user := evt.GetBase().User
-	alreadySeenUser := ed.userKeys.add(user.GetKey())
+	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().User.GetKey())
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
 			ed.deduplicatedUsers++
 		} else {
 			indexEvent := indexEvent{
-				BaseEvent{CreationDate: evt.GetBase().CreationDate, User: user},
+				BaseEvent{CreationDate: baseEvent.GetBase().CreationDate, User: baseEvent.GetBase().User},
 			}
 			ed.outbox.addEvent(indexEvent)
 		}

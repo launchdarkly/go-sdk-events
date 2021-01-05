@@ -59,6 +59,13 @@ func TestEventOutputFullEvents(t *testing.T) {
 			ldvalue.String("dv"), ldreason.EvaluationReason{})
 		verifyEventOutput(t, defaultFormatter, event4,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","userKey":"u","value":"dv","default":"dv"}`)
+
+		event5 := withoutReasons.NewUnknownFlagEvent("flagkey", User(lduser.NewAnonymousUser("u")),
+			ldvalue.String("dv"), ldreason.EvaluationReason{})
+		verifyEventOutput(t, defaultFormatter, event5,
+			`{"kind":"feature","creationDate":100000,"key":"flagkey","userKey":"u","contextKind":"anonymousUser","value":"dv","default":"dv"}`)
+		verifyEventOutput(t, formatterWithInlineUsers, event5,
+			`{"kind":"feature","creationDate":100000,"key":"flagkey","user":{"key":"u","anonymous":true},"contextKind":"anonymousUser","value":"dv","default":"dv"}`)
 	})
 
 	t.Run("debug", func(t *testing.T) {
@@ -75,6 +82,16 @@ func TestEventOutputFullEvents(t *testing.T) {
 			`{"kind":"identify","creationDate":100000,"key":"u","user":{"key":"u"}}`)
 	})
 
+	t.Run("alias", func(t *testing.T) {
+		event1 := withoutReasons.NewAliasEvent("p", "user", "u", "user")
+		verifyEventOutput(t, defaultFormatter, event1,
+			`{"kind":"alias","creationDate":100000,"contextKind":"user","key":"u","previousContextKind":"user","previousKey":"p"}`)
+
+		event2 := withoutReasons.NewAliasEvent("p", "anonymousUser", "u", "anonymousUser")
+		verifyEventOutput(t, defaultFormatter, event2,
+			`{"kind":"alias","creationDate":100000,"contextKind":"anonymousUser","key":"u","previousContextKind":"anonymousUser","previousKey":"p"}`)
+	})
+
 	t.Run("custom", func(t *testing.T) {
 		event1 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.Null(), false, 0)
 		verifyEventOutput(t, defaultFormatter, event1,
@@ -89,6 +106,12 @@ func TestEventOutputFullEvents(t *testing.T) {
 		event3 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.Null(), true, 2.5)
 		verifyEventOutput(t, defaultFormatter, event3,
 			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u","metricValue":2.5}`)
+
+		event4 := withoutReasons.NewCustomEvent("eventkey", User(lduser.NewAnonymousUser("u")), ldvalue.Null(), false, 0)
+		verifyEventOutput(t, defaultFormatter, event4,
+			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u","contextKind":"anonymousUser"}`)
+		verifyEventOutput(t, formatterWithInlineUsers, event4,
+			`{"kind":"custom","creationDate":100000,"key":"eventkey","user":{"key":"u","anonymous":true},"contextKind":"anonymousUser"}`)
 	})
 
 	t.Run("index", func(t *testing.T) {
@@ -182,15 +205,15 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	})
 
 	t.Run("empty payload", func(t *testing.T) {
-		bytes, count := defaultFormatter.makeOutputEvents([]Event{}, eventSummary{})
+		bytes, count := defaultFormatter.makeOutputEvents([]commonEvent{}, eventSummary{})
 		assert.Nil(t, bytes)
 		assert.Equal(t, 0, count)
 	})
 }
 
-func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event Event, expectedJSON string) {
+func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event commonEvent, expectedJSON string) {
 	expectedValue := ldvalue.Parse([]byte(expectedJSON))
-	bytes, count := formatter.makeOutputEvents([]Event{event}, eventSummary{})
+	bytes, count := formatter.makeOutputEvents([]commonEvent{event}, eventSummary{})
 	require.Equal(t, 1, count)
 	outValue := ldvalue.Parse(bytes)
 	require.Equal(t, outValue.Count(), 1)

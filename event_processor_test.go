@@ -36,6 +36,28 @@ const (
 	sdkKey = "SDK_KEY"
 )
 
+func TestAliasEventIsQueued(t *testing.T) {
+	ep, es := createEventProcessorAndSender(epDefaultConfig)
+	defer ep.Close()
+
+	ie := defaultEventFactory.NewAliasEvent("Blue", "user", "Red", "user")
+	ep.RecordAliasEvent(ie)
+	ep.Flush()
+	ep.waitUntilInactive()
+
+	expected := ldvalue.ObjectBuild().
+		Set("kind", ldvalue.String("alias")).
+		Set("key", ldvalue.String("Red")).
+		Set("contextKind", ldvalue.String("user")).
+		Set("previousKey", ldvalue.String("Blue")).
+		Set("previousContextKind", ldvalue.String("user")).
+		Set("creationDate", ldvalue.Float64(float64(ie.CreationDate))).
+		Build()
+
+	assert.Equal(t, expected, es.awaitEvent(t))
+	es.assertNoMoreEvents(t)
+}
+
 func TestIdentifyEventIsQueued(t *testing.T) {
 	ep, es := createEventProcessorAndSender(epDefaultConfig)
 	defer ep.Close()

@@ -144,6 +144,7 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
+		assert.Equal(t, expected.BaseEvent.CreationDate, event1.GetCreationDate())
 
 		event2 := withReasons.NewUnknownFlagEvent(expected.Key, user, expected.Default, expected.Reason)
 		assert.Equal(t, expected, event2)
@@ -163,6 +164,7 @@ func TestEventFactory(t *testing.T) {
 
 		event := withoutReasons.NewCustomEvent(expected.Key, user, expected.Data, true, expected.MetricValue)
 		assert.Equal(t, expected, event)
+		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})
 
 	t.Run("NewIdentifyEvent", func(t *testing.T) {
@@ -175,6 +177,7 @@ func TestEventFactory(t *testing.T) {
 
 		event := withoutReasons.NewIdentifyEvent(user)
 		assert.Equal(t, expected, event)
+		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})
 
 	t.Run("indexEvent (not from factory)", func(t *testing.T) {
@@ -185,5 +188,17 @@ func TestEventFactory(t *testing.T) {
 			},
 		}
 		assert.Equal(t, ie.BaseEvent, ie.GetBase())
+		assert.Equal(t, ie.BaseEvent.CreationDate, ie.GetCreationDate())
+	})
+
+	t.Run("AliasEvent (not from factory)", func(t *testing.T) {
+		ie := AliasEvent{
+			CreationDate: fakeTime,
+			CurrentKey:   "current",
+			CurrentKind:  "user",
+			PreviousKey:  "previous",
+			PreviousKind: "user",
+		}
+		assert.Equal(t, ie.CreationDate, ie.GetCreationDate())
 	})
 }
