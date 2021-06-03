@@ -2,6 +2,10 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [1.1.1] - 2021-06-03
+### Fixed:
+- Updated `go-jsonstream` and `go-sdk-common` dependencies to latest patch versions for JSON parsing fixes. Those patches should not affect `go-sdk-events` since it does not _parse_ JSON, but this ensures that the latest release has the most correct transitive dependencies.
+
 ## [1.1.0] - 2021-01-21
 ### Added:
 - Added support for a new analytics event type, &#34;alias&#34;, which will be used in a future version of the SDK.
