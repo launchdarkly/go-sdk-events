@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
-	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
-	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+
+	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
+	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -26,14 +27,14 @@ var epDefaultConfig = EventsConfiguration{
 
 var epDefaultUser = User(lduser.NewUserBuilder(testUserKey).Name("Red").Build())
 
-var userJson = ldvalue.ObjectBuild().
-	Set("key", ldvalue.String("userKey")).
-	Set("name", ldvalue.String("Red")).
-	Build()
-var filteredUserJson = ldvalue.ObjectBuild().
-	Set("key", ldvalue.String("userKey")).
-	Set("privateAttrs", ldvalue.ArrayOf(ldvalue.String("name"))).
-	Build()
+var userJson = json.RawMessage(`{
+	"key": "userKey",
+	"name": "Red"
+}`)
+var filteredUserJson = json.RawMessage(`{
+	"key": "userKey",
+	"privateAttrs": ["name"]
+}`)
 
 const (
 	sdkKey = "SDK_KEY"
@@ -77,7 +78,7 @@ func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {
 	ep.Flush()
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -93,7 +94,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -111,7 +112,7 @@ func TestUserDetailsAreScrubbedInIndexEvent(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, filteredUserJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -129,7 +130,7 @@ func TestUserDetailsAreScrubbedInDebugEvent(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, filteredUserJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, true, &filteredUserJson))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -147,7 +148,7 @@ func TestFeatureEventCanContainReason(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -169,7 +170,7 @@ func TestDebugEventIsAddedIfFlagIsTemporarilyInDebugMode(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, true, &userJson))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -192,7 +193,7 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, true, &userJson))
-	assertSummaryEventHasCounter(t, flag, 2, value, 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -224,7 +225,7 @@ func TestDebugModeExpiresBasedOnClientTimeIfClientTimeIsLater(t *testing.T) {
 	ep.Flush()
 
 	// should get a summary event only, not a debug event
-	assertSummaryEventHasCounter(t, flag, 0, ldvalue.Null(), 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 0, ldvalue.Null(), 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -256,7 +257,7 @@ func TestDebugModeExpiresBasedOnServerTimeIfServerTimeIsLater(t *testing.T) {
 	ep.Flush()
 
 	// should get a summary event only, not a debug event
-	assertSummaryEventHasCounter(t, flag, 0, ldvalue.Null(), 1, es.awaitEvent(t))
+	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 0, ldvalue.Null(), 1))
 	es.assertNoMoreEvents(t)
 }
 
@@ -276,10 +277,9 @@ func TestTwoFeatureEventsForSameUserGenerateOnlyOneIndexEvent(t *testing.T) {
 	assertNextEventMatches(t, es, expectedIndexEvent(fe1, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe1, flag1, value, false, nil))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe2, flag2, value, false, nil))
-	se := es.awaitEvent(t)
-	assertSummaryEventHasCounter(t, flag1, 2, value, 1, se)
-	assertSummaryEventHasCounter(t, flag2, 2, value, 1, se)
-	es.assertNoMoreEvents(t)
+	assertNextEventMatches(t, es, m.AllOf(
+		summaryEventHasCounter(flag1, 2, value, 1),
+		summaryEventHasCounter(flag2, 2, value, 1)))
 }
 
 func TestNonTrackedEventsAreSummarized(t *testing.T) {
@@ -299,11 +299,11 @@ func TestNonTrackedEventsAreSummarized(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe1, userJson))
 
-	se := es.awaitEvent(t)
-	assertSummaryEventHasCounter(t, flag1, 2, value, 1, se)
-	assertSummaryEventHasCounter(t, flag2, 3, value, 2, se)
-	assert.Equal(t, float64(fe1.CreationDate), se.GetByKey("startDate").Float64Value())
-	assert.Equal(t, float64(fe3.CreationDate), se.GetByKey("endDate").Float64Value())
+	assertNextEventMatches(t, es, m.AllOf(
+		m.JSONProperty("startDate").Should(m.JSONEqual(fe1.CreationDate)), // using JSONEqual to ignore the specific Go numeric type
+		m.JSONProperty("endDate").Should(m.JSONEqual(fe3.CreationDate)),
+		summaryEventHasCounter(flag1, 2, value, 1),
+		summaryEventHasCounter(flag2, 3, value, 2)))
 
 	es.assertNoMoreEvents(t)
 }
@@ -319,13 +319,13 @@ func TestCustomEventIsQueuedWithUser(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(ce, userJson))
 
-	expected := ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("custom")).
-		Set("creationDate", ldvalue.Float64(float64(ce.CreationDate))).
-		Set("key", ldvalue.String(ce.Key)).
-		Set("data", data).
-		Set("userKey", ldvalue.String(epDefaultUser.GetKey())).
-		Build()
+	expected := m.JSONEqual(map[string]interface{}{
+		"kind":         "custom",
+		"creationDate": ce.CreationDate,
+		"key":          ce.Key,
+		"data":         data,
+		"userKey":      epDefaultUser.GetKey(),
+	})
 	assertNextEventMatches(t, es, expected)
 
 	es.assertNoMoreEvents(t)
@@ -344,14 +344,14 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(ce, userJson))
 
-	expected := ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("custom")).
-		Set("creationDate", ldvalue.Float64(float64(ce.CreationDate))).
-		Set("key", ldvalue.String(ce.Key)).
-		Set("data", data).
-		Set("metricValue", ldvalue.Float64(metric)).
-		Set("userKey", ldvalue.String(testUserKey)).
-		Build()
+	expected := m.JSONEqual(map[string]interface{}{
+		"kind":         "custom",
+		"creationDate": ce.CreationDate,
+		"key":          ce.Key,
+		"data":         data,
+		"metricValue":  metric,
+		"userKey":      epDefaultUser.GetKey(),
+	})
 	assertNextEventMatches(t, es, expected)
 	es.assertNoMoreEvents(t)
 }
@@ -365,7 +365,7 @@ func TestRawEventIsQueued(t *testing.T) {
 	ep.Flush()
 	ep.waitUntilInactive()
 
-	assertNextEventMatches(t, es, ldvalue.Raw(rawData))
+	assertNextEventMatches(t, es, m.JSONEqual(rawData))
 	es.assertNoMoreEvents(t)
 }
 
@@ -512,7 +512,7 @@ func TestDiagnosticPeriodicEventHasEventCounters(t *testing.T) {
 	initEvent := es.awaitDiagnosticEvent(t)
 	assert.Equal(t, "diagnostic-init", initEvent.GetByKey("kind").StringValue())
 
-	user := EventUser{lduser.NewUser("userkey"), nil}
+	user := User(lduser.NewUser("userkey"))
 	ep.RecordCustomEvent(defaultEventFactory.NewCustomEvent("key", user, ldvalue.Null(), false, 0))
 	ep.RecordCustomEvent(defaultEventFactory.NewCustomEvent("key", user, ldvalue.Null(), false, 0))
 	ep.RecordCustomEvent(defaultEventFactory.NewCustomEvent("key", user, ldvalue.Null(), false, 0))
@@ -594,16 +594,16 @@ func TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy(t *testing.T) {
 
 	// The first unblocked worker should pick up the queued payload with event1.
 	senderGateCh <- struct{}{}
-	received1 := es.awaitEvent(t)
-	assert.Equal(t, user1.GetKey(), received1.GetByKey("key").StringValue())
+	assertNextEventMatches(t, es,
+		m.JSONProperty("user").Should(m.JSONProperty("key").Should(m.Equal(user1.GetKey()))))
 
 	// Now a flush should succeed and send the current payload.
 	senderGateCh <- struct{}{}
 	ep.Flush()
-	received2 := es.awaitEvent(t)
-	received3 := es.awaitEvent(t)
-	assert.Equal(t, user2.GetKey(), received2.GetByKey("key").StringValue())
-	assert.Equal(t, user3.GetKey(), received3.GetByKey("key").StringValue())
+	assertNextEventMatches(t, es,
+		m.JSONProperty("user").Should(m.JSONProperty("key").Should(m.Equal(user2.GetKey()))))
+	assertNextEventMatches(t, es,
+		m.JSONProperty("user").Should(m.JSONProperty("key").Should(m.Equal(user3.GetKey()))))
 	assert.Equal(t, maxFlushWorkers+2, es.getPayloadCount())
 }
 
@@ -631,73 +631,71 @@ func userJsonEncoding(u EventUser) ldvalue.Value {
 	return result
 }
 
-func expectedIdentifyEvent(sourceEvent Event, encodedUser ldvalue.Value) ldvalue.Value {
-	return ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("identify")).
-		Set("key", ldvalue.String(sourceEvent.GetBase().User.GetKey())).
-		Set("creationDate", ldvalue.Float64(float64(sourceEvent.GetBase().CreationDate))).
-		Set("user", encodedUser).
-		Build()
+func expectedIdentifyEvent(sourceEvent Event, encodedUser interface{}) m.Matcher {
+	return m.JSONEqual(map[string]interface{}{
+		"kind":         "identify",
+		"creationDate": sourceEvent.GetBase().CreationDate,
+		"key":          sourceEvent.GetBase().User.GetKey(),
+		"user":         encodedUser,
+	})
 }
 
-func expectedIndexEvent(sourceEvent Event, encodedUser ldvalue.Value) ldvalue.Value {
-	return ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("index")).
-		Set("creationDate", ldvalue.Float64(float64(sourceEvent.GetBase().CreationDate))).
-		Set("user", encodedUser).
-		Build()
+func expectedIndexEvent(sourceEvent Event, encodedUser interface{}) m.Matcher {
+	return m.JSONEqual(map[string]interface{}{
+		"kind":         "index",
+		"creationDate": sourceEvent.GetBase().CreationDate,
+		"user":         encodedUser,
+	})
 }
 
 func expectedFeatureEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties,
-	value ldvalue.Value, debug bool, inlineUser *ldvalue.Value) ldvalue.Value {
-	kind := "feature"
-	if debug {
-		kind = "debug"
+	value ldvalue.Value, debug bool, inlineUser interface{}) m.Matcher {
+	props := map[string]interface{}{
+		"kind":         "feature",
+		"key":          flag.GetKey(),
+		"creationDate": sourceEvent.GetBase().CreationDate,
+		"version":      flag.GetVersion(),
+		"value":        value,
+		"default":      nil,
 	}
-	expected := ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String(kind)).
-		Set("key", ldvalue.String(flag.GetKey())).
-		Set("creationDate", ldvalue.Float64(float64(sourceEvent.GetBase().CreationDate))).
-		Set("version", ldvalue.Int(flag.GetVersion())).
-		Set("value", value).
-		Set("default", ldvalue.Null())
+	if debug {
+		props["kind"] = "debug"
+	}
 	if sourceEvent.Variation.IsDefined() {
-		expected.Set("variation", ldvalue.Int(sourceEvent.Variation.IntValue()))
+		props["variation"] = sourceEvent.Variation.IntValue()
 	}
 	if sourceEvent.Reason.GetKind() != "" {
-		expected.Set("reason", jsonEncoding(sourceEvent.Reason))
+		props["reason"] = jsonEncoding(sourceEvent.Reason)
 	}
 	if inlineUser == nil {
-		expected.Set("userKey", ldvalue.String(sourceEvent.User.GetKey()))
+		props["userKey"] = sourceEvent.User.GetKey()
 	} else {
-		expected.Set("user", *inlineUser)
+		props["user"] = inlineUser
 	}
-	return expected.Build()
+	return m.JSONEqual(props)
 }
 
-func assertSummaryEventHasFlag(t *testing.T, flag FlagEventProperties, output ldvalue.Value) bool {
-	if assert.Equal(t, "summary", output.GetByKey("kind").StringValue()) {
-		flags := output.GetByKey("features")
-		return !flags.GetByKey(flag.GetKey()).IsNull()
+func summaryEventHasCounter(flag flagEventPropertiesImpl, variation int, value ldvalue.Value, count int) m.Matcher {
+	expectedCounter := map[string]interface{}{
+		"value":   value,
+		"count":   count,
+		"version": flag.GetVersion(),
 	}
-	return false
-}
-
-func assertSummaryEventHasCounter(t *testing.T, flag flagEventPropertiesImpl, variation int, value ldvalue.Value, count int, output ldvalue.Value) {
-	if assertSummaryEventHasFlag(t, flag, output) {
-		f := output.GetByKey("features").GetByKey(flag.GetKey())
-		assert.Equal(t, ldvalue.ObjectType, f.Type())
-		expected := ldvalue.ObjectBuild().Set("value", value).Set("count", ldvalue.Int(count)).Set("version", ldvalue.Int(flag.GetVersion()))
-		if variation >= 0 {
-			expected.Set("variation", ldvalue.Int(variation))
-		}
-		counters := []ldvalue.Value{}
-		f.GetByKey("counters").Enumerate(func(i int, k string, v ldvalue.Value) bool {
-			counters = append(counters, v)
-			return true
-		})
-		assert.Contains(t, counters, expected.Build())
+	if variation >= 0 {
+		expectedCounter["variation"] = variation
 	}
+	return m.AllOf(
+		m.JSONProperty("kind").Should(m.Equal("summary")),
+		m.JSONProperty("features").Should(
+			m.JSONProperty(flag.GetKey()).Should(
+				m.JSONProperty("counters").Should(
+					m.ItemsInclude(
+						m.JSONEqual(expectedCounter),
+					),
+				),
+			),
+		),
+	)
 }
 
 // used only for testing - ensures that all pending messages and flushes have completed
@@ -714,7 +712,7 @@ func createEventProcessorAndSender(config EventsConfiguration) (*defaultEventPro
 	return ep.(*defaultEventProcessor), sender
 }
 
-func assertNextEventMatches(t *testing.T, es *mockEventSender, expectedJSON ldvalue.Value) {
+func assertNextEventMatches(t *testing.T, es *mockEventSender, jsonMatcher m.Matcher) {
 	t.Helper()
-	m.In(t).Assert(es.awaitEvent(t), m.JSONEqual(expectedJSON))
+	m.In(t).Assert(es.awaitEvent(t), jsonMatcher)
 }

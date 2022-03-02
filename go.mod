@@ -9,3 +9,5 @@ require (
 	gopkg.in/launchdarkly/go-jsonstream.v1 v1.0.1
 	gopkg.in/launchdarkly/go-sdk-common.v2 v2.2.1
 )
+
+replace github.com/launchdarkly/go-test-helpers/v2 => /Users/elibishop/work/go-test-helpers
