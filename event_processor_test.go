@@ -78,7 +78,7 @@ func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {
 	ep.Flush()
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -94,7 +94,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -112,7 +112,7 @@ func TestUserDetailsAreScrubbedInIndexEvent(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, filteredUserJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -130,7 +130,7 @@ func TestUserDetailsAreScrubbedInDebugEvent(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, filteredUserJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, true, &filteredUserJson))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -148,7 +148,7 @@ func TestFeatureEventCanContainReason(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -170,7 +170,7 @@ func TestDebugEventIsAddedIfFlagIsTemporarilyInDebugMode(t *testing.T) {
 
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, true, &userJson))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -193,7 +193,7 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 	assertNextEventMatches(t, es, expectedIndexEvent(fe, userJson))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, false, nil))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe, flag, value, true, &userJson))
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 2, value, 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(2, value, 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -225,7 +225,7 @@ func TestDebugModeExpiresBasedOnClientTimeIfClientTimeIsLater(t *testing.T) {
 	ep.Flush()
 
 	// should get a summary event only, not a debug event
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 0, ldvalue.Null(), 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(0, ldvalue.Null(), 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -257,7 +257,7 @@ func TestDebugModeExpiresBasedOnServerTimeIfServerTimeIsLater(t *testing.T) {
 	ep.Flush()
 
 	// should get a summary event only, not a debug event
-	assertNextEventMatches(t, es, summaryEventHasCounter(flag, 0, ldvalue.Null(), 1))
+	assertNextEventMatches(t, es, summaryEventWithFlag(flag, summaryCounterProps(0, ldvalue.Null(), 1)))
 	es.assertNoMoreEvents(t)
 }
 
@@ -278,8 +278,9 @@ func TestTwoFeatureEventsForSameUserGenerateOnlyOneIndexEvent(t *testing.T) {
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe1, flag1, value, false, nil))
 	assertNextEventMatches(t, es, expectedFeatureEvent(fe2, flag2, value, false, nil))
 	assertNextEventMatches(t, es, m.AllOf(
-		summaryEventHasCounter(flag1, 2, value, 1),
-		summaryEventHasCounter(flag2, 2, value, 1)))
+		summaryEventWithFlag(flag1, summaryCounterProps(2, value, 1)),
+		summaryEventWithFlag(flag2, summaryCounterProps(2, value, 1)),
+	))
 }
 
 func TestNonTrackedEventsAreSummarized(t *testing.T) {
@@ -302,8 +303,9 @@ func TestNonTrackedEventsAreSummarized(t *testing.T) {
 	assertNextEventMatches(t, es, m.AllOf(
 		m.JSONProperty("startDate").Should(m.JSONEqual(fe1.CreationDate)), // using JSONEqual to ignore the specific Go numeric type
 		m.JSONProperty("endDate").Should(m.JSONEqual(fe3.CreationDate)),
-		summaryEventHasCounter(flag1, 2, value, 1),
-		summaryEventHasCounter(flag2, 3, value, 2)))
+		summaryEventWithFlag(flag1, summaryCounterProps(2, value, 1)),
+		summaryEventWithFlag(flag2, summaryCounterProps(3, value, 2)),
+	))
 
 	es.assertNoMoreEvents(t)
 }
@@ -675,27 +677,34 @@ func expectedFeatureEvent(sourceEvent FeatureRequestEvent, flag FlagEventPropert
 	return m.JSONEqual(props)
 }
 
-func summaryEventHasCounter(flag flagEventPropertiesImpl, variation int, value ldvalue.Value, count int) m.Matcher {
-	expectedCounter := map[string]interface{}{
-		"value":   value,
-		"count":   count,
-		"version": flag.GetVersion(),
-	}
-	if variation >= 0 {
-		expectedCounter["variation"] = variation
+func summaryEventWithFlag(flag flagEventPropertiesImpl, counterProps ...[]m.Matcher) m.Matcher {
+	counters := make([]m.Matcher, 0, len(counterProps))
+	for _, cp := range counterProps {
+		counters = append(counters, m.AllOf(
+			append(cp, m.JSONProperty("version").Should(m.Equal(flag.GetVersion())))...,
+		))
 	}
 	return m.AllOf(
 		m.JSONProperty("kind").Should(m.Equal("summary")),
 		m.JSONProperty("features").Should(
 			m.JSONProperty(flag.GetKey()).Should(
-				m.JSONProperty("counters").Should(
-					m.ItemsInclude(
-						m.JSONEqual(expectedCounter),
-					),
-				),
+				m.JSONProperty("counters").Should(m.ItemsInAnyOrder(counters...)),
 			),
 		),
 	)
+}
+
+func summaryCounterProps(variation int, value ldvalue.Value, count int) []m.Matcher {
+	ms := []m.Matcher{
+		m.JSONProperty("value").Should(m.JSONEqual(value)),
+		m.JSONProperty("count").Should(m.Equal(count)),
+	}
+	if variation >= 0 {
+		ms = append(ms, m.JSONProperty("variation").Should(m.Equal(variation)))
+	} else {
+		ms = append(ms, m.JSONOptProperty("variation").Should(m.BeNil()))
+	}
+	return ms
 }
 
 // used only for testing - ensures that all pending messages and flushes have completed
