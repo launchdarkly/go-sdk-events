@@ -235,7 +235,7 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
 	var debugEvent commonEvent
-	inlinedUser := ed.config.InlineUsersInEvents
+	inlinedUser := false
 	var baseEvent Event
 	switch evt := evt.(type) {
 	case FeatureRequestEvent:

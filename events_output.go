@@ -62,7 +62,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		obj.Name("key").String(evt.Key)
 		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
 		writeContextKind(&obj, evt.User.GetAnonymous())
-		if ef.config.InlineUsersInEvents || evt.Debug {
+		if evt.Debug {
 			ef.userFilter.writeUser(obj.Name("user"), evt.User)
 		} else {
 			obj.Name("userKey").String(evt.User.GetKey())
@@ -82,11 +82,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
 		writeContextKind(&obj, evt.User.GetAnonymous())
-		if ef.config.InlineUsersInEvents {
-			ef.userFilter.writeUser(obj.Name("user"), evt.User)
-		} else {
-			obj.Name("userKey").String(evt.User.GetKey())
-		}
+		obj.Name("userKey").String(evt.User.GetKey())
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
 	case IdentifyEvent:

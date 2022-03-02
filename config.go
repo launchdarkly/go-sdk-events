@@ -38,8 +38,6 @@ type EventsConfiguration struct {
 	// The time between flushes of the event buffer. Decreasing the flush interval means that the event buffer
 	// is less likely to reach capacity.
 	FlushInterval time.Duration
-	// Set to true if you need to see the full user details in every analytics event.
-	InlineUsersInEvents bool
 	// The destination for log output.
 	Loggers ldlog.Loggers
 	// True if user keys can be included in log messages.
