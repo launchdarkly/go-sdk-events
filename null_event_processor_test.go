@@ -15,7 +15,6 @@ func TestNullEventProcessor(t *testing.T) {
 	n.RecordFeatureRequestEvent(defaultEventFactory.NewUnknownFlagEvent("x", epDefaultUser, ldvalue.Null(),
 		ldreason.EvaluationReason{}))
 	n.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEvent(epDefaultUser))
-	n.RecordAliasEvent(defaultEventFactory.NewAliasEvent("", "", "", ""))
 	n.RecordCustomEvent(defaultEventFactory.NewCustomEvent("x", epDefaultUser, ldvalue.Null(), false, 0))
 	n.Flush()
 	require.NoError(t, n.Close())

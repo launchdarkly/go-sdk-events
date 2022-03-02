@@ -1,6 +1,7 @@
 package ldevents
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -179,8 +180,10 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})
+}
 
-	t.Run("indexEvent (not from factory)", func(t *testing.T) {
+func TestPropertiesOfEventTypesNotFromFactory(t *testing.T) {
+	t.Run("indexEvent", func(t *testing.T) {
 		ie := indexEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
@@ -191,14 +194,8 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, ie.BaseEvent.CreationDate, ie.GetCreationDate())
 	})
 
-	t.Run("AliasEvent (not from factory)", func(t *testing.T) {
-		ie := AliasEvent{
-			CreationDate: fakeTime,
-			CurrentKey:   "current",
-			CurrentKind:  "user",
-			PreviousKey:  "previous",
-			PreviousKind: "user",
-		}
-		assert.Equal(t, ie.CreationDate, ie.GetCreationDate())
+	t.Run("rawEvent", func(t *testing.T) {
+		re := rawEvent{json.RawMessage("{}")}
+		assert.Equal(t, ldtime.UnixMillisecondTime(0), re.GetCreationDate())
 	})
 }

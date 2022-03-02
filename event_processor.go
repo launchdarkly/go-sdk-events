@@ -1,6 +1,7 @@
 package ldevents
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -80,8 +81,8 @@ func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEvent) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
-func (ep *defaultEventProcessor) RecordAliasEvent(e AliasEvent) {
-	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+func (ep *defaultEventProcessor) RecordRawEvent(data json.RawMessage) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: rawEvent{data: data}})
 }
 
 func (ep *defaultEventProcessor) Flush() {
@@ -251,10 +252,8 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 		baseEvent = evt
 	case CustomEvent:
 		baseEvent = evt
-	case AliasEvent:
+	default:
 		ed.outbox.addEvent(evt)
-	}
-	if baseEvent == nil {
 		return
 	}
 	// For each user we haven't seen before, we add an index event before the event that referenced

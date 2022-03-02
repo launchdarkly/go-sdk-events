@@ -36,28 +36,6 @@ const (
 	sdkKey = "SDK_KEY"
 )
 
-func TestAliasEventIsQueued(t *testing.T) {
-	ep, es := createEventProcessorAndSender(epDefaultConfig)
-	defer ep.Close()
-
-	ie := defaultEventFactory.NewAliasEvent("Blue", "user", "Red", "user")
-	ep.RecordAliasEvent(ie)
-	ep.Flush()
-	ep.waitUntilInactive()
-
-	expected := ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("alias")).
-		Set("key", ldvalue.String("Red")).
-		Set("contextKind", ldvalue.String("user")).
-		Set("previousKey", ldvalue.String("Blue")).
-		Set("previousContextKind", ldvalue.String("user")).
-		Set("creationDate", ldvalue.Float64(float64(ie.CreationDate))).
-		Build()
-
-	assert.Equal(t, expected, es.awaitEvent(t))
-	es.assertNoMoreEvents(t)
-}
-
 func TestIdentifyEventIsQueued(t *testing.T) {
 	ep, es := createEventProcessorAndSender(epDefaultConfig)
 	defer ep.Close()
@@ -427,6 +405,19 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 		Set("user", userJsonEncoding(epDefaultUser)).
 		Build()
 	assert.Equal(t, expected, es.awaitEvent(t))
+	es.assertNoMoreEvents(t)
+}
+
+func TestRawEventIsQueued(t *testing.T) {
+	ep, es := createEventProcessorAndSender(epDefaultConfig)
+	defer ep.Close()
+
+	rawData := json.RawMessage(`{"kind":"alias","arbitrary":["we","don't","care","what's","in","here"]}`)
+	ep.RecordRawEvent(rawData)
+	ep.Flush()
+	ep.waitUntilInactive()
+
+	assert.Equal(t, ldvalue.Parse(rawData), es.awaitEvent(t))
 	es.assertNoMoreEvents(t)
 }
 
