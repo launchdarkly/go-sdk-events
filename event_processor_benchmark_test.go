@@ -19,7 +19,6 @@ const benchmarkEventCount = 100
 
 func BenchmarkEventProcessor(b *testing.B) {
 	configDefault := EventsConfiguration{Capacity: 1000}
-	configWithInlineUsers := EventsConfiguration{Capacity: 1000, InlineUsersInEvents: true}
 
 	doEvents := func(b *testing.B, config EventsConfiguration, sendEvents func(EventProcessor)) {
 		ep, es := createBenchmarkEventProcessorAndSender(config)
@@ -46,10 +45,6 @@ func BenchmarkEventProcessor(b *testing.B) {
 
 	b.Run("custom events", func(b *testing.B) {
 		doEvents(b, configDefault, sendBenchmarkCustomEvents())
-	})
-
-	b.Run("custom events with inline users", func(b *testing.B) {
-		doEvents(b, configWithInlineUsers, sendBenchmarkCustomEvents())
 	})
 }
 

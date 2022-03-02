@@ -5,13 +5,13 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const fakeTime = ldtime.UnixMillisecondTime(100000)
@@ -28,16 +28,12 @@ func TestEventOutputFullEvents(t *testing.T) {
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
 
 	defaultFormatter := eventOutputFormatter{config: epDefaultConfig}
-	formatterWithInlineUsers := eventOutputFormatter{config: epDefaultConfig}
-	formatterWithInlineUsers.config.InlineUsersInEvents = true
 
 	t.Run("feature", func(t *testing.T) {
 		event1 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
 			ldvalue.String("dv"), "")
 		verifyEventOutput(t, defaultFormatter, event1,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event1,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"user":{"key":"u"},"variation":1,"value":"v","default":"dv"}`)
 
 		event1r := withReasons.NewEvalEvent(flag, user,
 			ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, ldreason.NewEvalReasonFallthrough()),
@@ -65,8 +61,6 @@ func TestEventOutputFullEvents(t *testing.T) {
 			ldvalue.String("dv"), ldreason.EvaluationReason{})
 		verifyEventOutput(t, defaultFormatter, event5,
 			`{"kind":"feature","creationDate":100000,"key":"flagkey","userKey":"u","contextKind":"anonymousUser","value":"dv","default":"dv"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event5,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","user":{"key":"u","anonymous":true},"contextKind":"anonymousUser","value":"dv","default":"dv"}`)
 	})
 
 	t.Run("debug", func(t *testing.T) {
@@ -87,8 +81,6 @@ func TestEventOutputFullEvents(t *testing.T) {
 		event1 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.Null(), false, 0)
 		verifyEventOutput(t, defaultFormatter, event1,
 			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event1,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","user":{"key":"u"}}`)
 
 		event2 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.String("d"), false, 0)
 		verifyEventOutput(t, defaultFormatter, event2,
@@ -101,8 +93,6 @@ func TestEventOutputFullEvents(t *testing.T) {
 		event4 := withoutReasons.NewCustomEvent("eventkey", User(lduser.NewAnonymousUser("u")), ldvalue.Null(), false, 0)
 		verifyEventOutput(t, defaultFormatter, event4,
 			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u","contextKind":"anonymousUser"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event4,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","user":{"key":"u","anonymous":true},"contextKind":"anonymousUser"}`)
 	})
 
 	t.Run("index", func(t *testing.T) {
