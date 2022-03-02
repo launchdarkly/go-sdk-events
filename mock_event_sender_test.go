@@ -77,21 +77,33 @@ func (ms *mockEventSender) getPayloadCount() int {
 }
 
 func (ms *mockEventSender) awaitEvent(t *testing.T) ldvalue.Value {
-	return ms.awaitEventCh(t, ms.eventsCh)
+	event, ok := ms.tryAwaitEvent()
+	if !ok {
+		require.Fail(t, "timed out waiting for analytics event")
+	}
+	return event
+}
+
+func (ms *mockEventSender) tryAwaitEvent() (ldvalue.Value, bool) {
+	return ms.tryAwaitEventCh(ms.eventsCh)
 }
 
 func (ms *mockEventSender) awaitDiagnosticEvent(t *testing.T) ldvalue.Value {
-	return ms.awaitEventCh(t, ms.diagnosticEventsCh)
+	event, ok := ms.tryAwaitEventCh(ms.diagnosticEventsCh)
+	if !ok {
+		require.Fail(t, "timed out waiting for diagnostic event")
+	}
+	return event
 }
 
-func (ms *mockEventSender) awaitEventCh(t *testing.T, ch <-chan ldvalue.Value) ldvalue.Value {
+func (ms *mockEventSender) tryAwaitEventCh(ch <-chan ldvalue.Value) (ldvalue.Value, bool) {
 	select {
 	case e := <-ch:
-		return e
+		return e, true
 	case <-time.After(time.Second):
-		require.Fail(t, "expected an event but did not receive one")
+		break
 	}
-	return ldvalue.Null()
+	return ldvalue.Value{}, false
 }
 
 func (ms *mockEventSender) assertNoMoreEvents(t *testing.T) {

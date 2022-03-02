@@ -9,11 +9,6 @@ import (
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
 
-var (
-	benchmarkBytesResult []byte
-	benchmarkIntResult   int
-)
-
 func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
 	events := makeBasicEvents()
 	ef := eventOutputFormatter{}
@@ -83,7 +78,7 @@ func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 	flag2Default := ldvalue.String("default2")
 	factory := NewEventFactory(false, fakeTimeFn)
 
-	ef := eventOutputFormatter{config: epDefaultConfig}
+	ef := eventOutputFormatter{config: basicConfigWithoutPrivateAttrs()}
 
 	es := newEventSummarizer()
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),

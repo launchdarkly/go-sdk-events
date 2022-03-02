@@ -131,7 +131,7 @@ func TestWriteUserWithNoFiltering(t *testing.T) {
 		if err := json.Unmarshal(expectedJSON, &expectedValue); err != nil {
 			panic(err)
 		}
-		filter := newUserFilter(epDefaultConfig)
+		filter := newUserFilter(basicConfigWithoutPrivateAttrs())
 		v := makeUserOutput(filter, EventUser{u, nil})
 		assert.Equal(t, expectedValue, v)
 	}
@@ -146,7 +146,7 @@ func TestWriteUserWithNoFiltering(t *testing.T) {
 }
 
 func TestWriteUserWithPerUserPrivateAttributes(t *testing.T) {
-	filter := newUserFilter(epDefaultConfig)
+	filter := newUserFilter(basicConfigWithoutPrivateAttrs())
 	fu0 := makeUserOutput(filter, EventUser{buildUserWithAllAttributes().Build(), nil})
 
 	for attr, setter := range optionalStringSetters {
@@ -170,13 +170,13 @@ func TestWriteUserWithPerUserPrivateAttributes(t *testing.T) {
 }
 
 func TestWriteUserWithGlobalPrivateAttributes(t *testing.T) {
-	filter0 := newUserFilter(epDefaultConfig)
+	filter0 := newUserFilter(basicConfigWithoutPrivateAttrs())
 	u := EventUser{buildUserWithAllAttributes().Build(), nil}
 	fu0 := makeUserOutput(filter0, u)
 
 	for attr := range optionalStringSetters {
 		t.Run(string(attr), func(t *testing.T) {
-			config := epDefaultConfig
+			config := basicConfigWithoutPrivateAttrs()
 			config.PrivateAttributeNames = []lduser.UserAttribute{attr}
 			filter1 := newUserFilter(config)
 			fu1 := makeUserOutput(filter1, u)
@@ -184,14 +184,14 @@ func TestWriteUserWithGlobalPrivateAttributes(t *testing.T) {
 		})
 	}
 	t.Run("custom", func(t *testing.T) {
-		config := epDefaultConfig
+		config := basicConfigWithoutPrivateAttrs()
 		config.PrivateAttributeNames = []lduser.UserAttribute{lduser.UserAttribute(customAttrName1)}
 		filter1 := newUserFilter(config)
 		fu1 := makeUserOutput(filter1, u)
 		verifyUserHasPrivateCustomAttributeFilteredOut(t, customAttrName1, fu1, fu0)
 	})
 	t.Run("allAttributesPrivate", func(t *testing.T) {
-		config := epDefaultConfig
+		config := basicConfigWithoutPrivateAttrs()
 		config.AllAttributesPrivate = true
 		filter1 := newUserFilter(config)
 		fu1 := makeUserOutput(filter1, u)
@@ -203,7 +203,7 @@ func TestWriteUserWithGlobalPrivateAttributes(t *testing.T) {
 }
 
 func TestPrefilteredAttributesAreUsedUnchanged(t *testing.T) {
-	config := epDefaultConfig
+	config := basicConfigWithoutPrivateAttrs()
 	config.AllAttributesPrivate = true // this should be ignored
 	user := lduser.NewUserBuilder("user-key").Name("me").Build()
 	eventUser := EventUser{User: user, AlreadyFilteredAttributes: []string{"firstName"}}
@@ -221,7 +221,7 @@ func TestPrefilteredAttributesAreUsedUnchanged(t *testing.T) {
 func TestEmptyListOfPrefilteredAttributesIsUsedUnchanged(t *testing.T) {
 	// This tests that setting AlreadyFilteredAttributes to an empty slice, unlike leaving it nil, is treated as
 	// a sign that the user was already filtered and did not have any private attributes.
-	config := epDefaultConfig
+	config := basicConfigWithoutPrivateAttrs()
 	config.AllAttributesPrivate = true // this should be ignored
 	user := lduser.NewUserBuilder("user-key").Name("me").Build()
 	eventUser := EventUser{User: user, AlreadyFilteredAttributes: []string{}}

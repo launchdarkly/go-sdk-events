@@ -29,7 +29,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 	user := User(lduser.NewUser(userKey))
 	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
 
-	defaultFormatter := eventOutputFormatter{config: epDefaultConfig}
+	defaultFormatter := eventOutputFormatter{config: basicConfigWithoutPrivateAttrs()}
 
 	userJSON := json.RawMessage(`{"key":"u"}`)
 
@@ -213,7 +213,7 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 
-	defaultFormatter := eventOutputFormatter{config: epDefaultConfig}
+	defaultFormatter := eventOutputFormatter{config: basicConfigWithoutPrivateAttrs()}
 
 	t.Run("summary - single flag, single counter", func(t *testing.T) {
 		es1 := newEventSummarizer()
@@ -323,27 +323,12 @@ func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event commo
 	t.Helper()
 	bytes, count := formatter.makeOutputEvents([]commonEvent{event}, eventSummary{})
 	require.Equal(t, 1, count)
-	outValue := ldvalue.Parse(bytes)
-	require.Equal(t, outValue.Count(), 1)
-	outEvent := outValue.GetByIndex(0)
-	m.In(t).Assert(outEvent, jsonMatcher)
+	m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(jsonMatcher)))
 }
 
 func verifySummaryEventOutput(t *testing.T, formatter eventOutputFormatter, summary eventSummary, jsonMatcher m.Matcher) {
 	t.Helper()
 	bytes, count := formatter.makeOutputEvents(nil, summary)
 	require.Equal(t, 1, count)
-	outValue := ldvalue.Parse(bytes)
-	require.Equal(t, outValue.Count(), 1)
-	outEvent := outValue.GetByIndex(0)
-	m.In(t).Assert(outEvent, jsonMatcher)
-}
-
-func getArrayValues(v ldvalue.Value) []ldvalue.Value {
-	s := make([]ldvalue.Value, 0, v.Count())
-	v.Enumerate(func(i int, k string, vv ldvalue.Value) bool {
-		s = append(s, vv)
-		return true
-	})
-	return s
+	m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(jsonMatcher)))
 }
