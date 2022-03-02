@@ -554,16 +554,16 @@ func TestDiagnosticPeriodicEventsAreSent(t *testing.T) {
 	// We use a channel for this because we can't predict exactly when the events will be sent
 	initEvent := es.awaitDiagnosticEvent(t)
 	m.In(t).Assert(initEvent, eventKindIs("diagnostic-init"))
-	time0 := uint64(initEvent.GetByKey("creationDate").Float64Value())
+	time0 := requireCreationDate(t, initEvent)
 
 	event1 := es.awaitDiagnosticEvent(t)
 	m.In(t).Assert(event1, eventKindIs("diagnostic"))
-	time1 := uint64(event1.GetByKey("creationDate").Float64Value())
+	time1 := requireCreationDate(t, event1)
 	assert.True(t, time1-time0 >= 70, "event times should follow configured interval: %d, %d", time0, time1)
 
 	event2 := es.awaitDiagnosticEvent(t)
 	m.In(t).Assert(event2, eventKindIs("diagnostic"))
-	time2 := uint64(event2.GetByKey("creationDate").Float64Value())
+	time2 := requireCreationDate(t, event2)
 	assert.True(t, time2-time1 >= 70, "event times should follow configured interval: %d, %d", time1, time2)
 }
 
@@ -708,7 +708,7 @@ func createEventProcessorAndSender(config EventsConfiguration) (*defaultEventPro
 
 func assertEventsReceived(t *testing.T, es *mockEventSender, matchers ...m.Matcher) {
 	t.Helper()
-	received := make([]ldvalue.Value, 0, len(matchers))
+	received := make([]json.RawMessage, 0, len(matchers))
 	for range matchers {
 		if event, ok := es.tryAwaitEvent(); ok {
 			received = append(received, event)
@@ -719,4 +719,9 @@ func assertEventsReceived(t *testing.T, es *mockEventSender, matchers ...m.Match
 	}
 	// Use the ItemsInAnyOrder matcher because the exact ordering of events is not significant.
 	m.In(t).Assert(received, m.ItemsInAnyOrder(matchers...))
+}
+
+func requireCreationDate(t *testing.T, eventData json.RawMessage) ldtime.UnixMillisecondTime {
+	m.In(t).Require(eventData, m.JSONProperty("creationDate").Should(valueIsPositiveNonZeroInteger()))
+	return ldtime.UnixMillisecondTime(ldvalue.Parse(eventData).GetByKey("creationDate").Float64Value())
 }
