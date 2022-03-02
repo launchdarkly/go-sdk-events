@@ -81,7 +81,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 
 		assertEventsReceived(t, es,
 			anyIndexEvent(),
-			expectedFeatureEvent(fe, flag),
+			featureEventWithAllProperties(fe, flag),
 			// Here we also check that the summary count is still the same regardless of TrackEvents
 			summaryEventWithFlag(flag,
 				summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
@@ -152,7 +152,7 @@ func TestDebugEventProperties(t *testing.T) {
 
 		assertEventsReceived(t, es,
 			anyIndexEvent(),
-			expectedDebugEvent(fe, flag, userJSON(user, config)),
+			debugEventWithAllProperties(fe, flag, userJSON(user, config)),
 			anySummaryEvent(),
 		)
 		es.assertNoMoreEvents(t)
@@ -171,7 +171,7 @@ func TestFeatureEventCanContainReason(t *testing.T) {
 
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
-		expectedFeatureEvent(fe, flag),
+		featureEventWithAllProperties(fe, flag),
 		anySummaryEvent(),
 	)
 	es.assertNoMoreEvents(t)
@@ -195,7 +195,7 @@ func TestDebugEventIsAddedIfFlagIsTemporarilyInDebugMode(t *testing.T) {
 
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
-		expectedDebugEvent(fe, flag, userJSON(user, config)),
+		debugEventWithAllProperties(fe, flag, userJSON(user, config)),
 		summaryEventWithFlag(flag, summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
 	)
 	es.assertNoMoreEvents(t)
@@ -219,8 +219,8 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
-		expectedFeatureEvent(fe, flag),
-		expectedDebugEvent(fe, flag, userJSON(user, config)),
+		featureEventWithAllProperties(fe, flag),
+		debugEventWithAllProperties(fe, flag, userJSON(user, config)),
 		summaryEventWithFlag(flag, summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
 	)
 	es.assertNoMoreEvents(t)
@@ -305,9 +305,9 @@ func TestTwoFeatureEventsForSameUserGenerateOnlyOneIndexEvent(t *testing.T) {
 		ep.Flush()
 
 		assertEventsReceived(t, es,
-			expectedIndexEvent(fe1, userJSON(user, config)),
-			expectedFeatureEvent(fe1, flag1),
-			expectedFeatureEvent(fe2, flag2),
+			indexEventForUserKey(user.GetKey()),
+			featureEventWithAllProperties(fe1, flag1),
+			featureEventWithAllProperties(fe2, flag2),
 			anySummaryEvent(),
 		)
 		es.assertNoMoreEvents(t)

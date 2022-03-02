@@ -37,7 +37,7 @@ func TestDiagnosticInitEventBaseProperties(t *testing.T) {
 	m.In(t).Assert(event, m.AllOf(
 		m.JSONProperty("kind").Should(m.Equal("diagnostic-init")),
 		m.JSONProperty("id").Should(m.JSONEqual(id)),
-		m.JSONProperty("creationDate").Should(m.JSONEqual(ldtime.UnixMillisFromTime(startTime))), // using JSONEqual to ignore the specific Go numeric type
+		m.JSONProperty("creationDate").Should(equalNumericTime(ldtime.UnixMillisFromTime(startTime))),
 	))
 }
 

@@ -40,15 +40,6 @@ func anySummaryEvent() m.Matcher {
 	return eventKindIs("summary")
 }
 
-func expectedIdentifyEvent(sourceEvent Event, encodedUser interface{}) m.Matcher {
-	return m.JSONEqual(map[string]interface{}{
-		"kind":         "identify",
-		"creationDate": sourceEvent.GetBase().CreationDate,
-		"key":          sourceEvent.GetBase().User.GetKey(),
-		"user":         encodedUser,
-	})
-}
-
 func identifyEventForUserKey(key string) m.Matcher {
 	return m.AllOf(
 		eventKindIs("identify"),
@@ -63,29 +54,21 @@ func indexEventForUserKey(key string) m.Matcher {
 	)
 }
 
-func expectedIndexEvent(sourceEvent Event, encodedUser interface{}) m.Matcher {
-	return m.JSONEqual(map[string]interface{}{
-		"kind":         "index",
-		"creationDate": sourceEvent.GetBase().CreationDate,
-		"user":         encodedUser,
-	})
-}
-
 func featureEventForFlag(flag FlagEventProperties) m.Matcher {
 	return m.AllOf(
 		m.JSONProperty("kind").Should(m.Equal("feature")),
 		m.JSONProperty("key").Should(m.Equal("flag.GetKey")))
 }
 
-func expectedFeatureEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties) m.Matcher {
-	return expectedFeatureOrDebugEvent(sourceEvent, flag, false, nil)
+func featureEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties) m.Matcher {
+	return matchFeatureOrDebugEvent(sourceEvent, flag, false, nil)
 }
 
-func expectedDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties, userJSON interface{}) m.Matcher {
-	return expectedFeatureOrDebugEvent(sourceEvent, flag, true, userJSON)
+func debugEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties, userJSON interface{}) m.Matcher {
+	return matchFeatureOrDebugEvent(sourceEvent, flag, true, userJSON)
 }
 
-func expectedFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties,
+func matchFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties,
 	debug bool, inlineUser interface{}) m.Matcher {
 	props := map[string]interface{}{
 		"kind":         "feature",
