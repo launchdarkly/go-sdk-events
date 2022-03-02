@@ -190,15 +190,4 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, ie.BaseEvent, ie.GetBase())
 		assert.Equal(t, ie.BaseEvent.CreationDate, ie.GetCreationDate())
 	})
-
-	t.Run("AliasEvent (not from factory)", func(t *testing.T) {
-		ie := AliasEvent{
-			CreationDate: fakeTime,
-			CurrentKey:   "current",
-			CurrentKind:  "user",
-			PreviousKey:  "previous",
-			PreviousKind: "user",
-		}
-		assert.Equal(t, ie.CreationDate, ie.GetCreationDate())
-	})
 }

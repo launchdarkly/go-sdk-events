@@ -14,7 +14,6 @@ const (
 	FeatureDebugEventKind   = "debug"
 	CustomEventKind         = "custom"
 	IdentifyEventKind       = "identify"
-	AliasEventKind          = "alias"
 	IndexEventKind          = "index"
 	SummaryEventKind        = "summary"
 )
@@ -89,13 +88,6 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.User.GetKey())
 		ef.userFilter.writeUser(obj.Name("user"), evt.User)
-
-	case AliasEvent:
-		beginEventFields(&obj, AliasEventKind, evt.CreationDate)
-		obj.Name("key").String(evt.CurrentKey)
-		obj.Name("contextKind").String(evt.CurrentKind)
-		obj.Name("previousKey").String(evt.PreviousKey)
-		obj.Name("previousContextKind").String(evt.PreviousKind)
 
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)

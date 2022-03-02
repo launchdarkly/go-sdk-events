@@ -80,10 +80,6 @@ func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEvent) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
-func (ep *defaultEventProcessor) RecordAliasEvent(e AliasEvent) {
-	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
-}
-
 func (ep *defaultEventProcessor) Flush() {
 	ep.postNonBlockingMessageToInbox(flushEventsMessage{})
 }
@@ -251,8 +247,6 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 		baseEvent = evt
 	case CustomEvent:
 		baseEvent = evt
-	case AliasEvent:
-		ed.outbox.addEvent(evt)
 	}
 	if baseEvent == nil {
 		return

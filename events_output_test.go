@@ -82,16 +82,6 @@ func TestEventOutputFullEvents(t *testing.T) {
 			`{"kind":"identify","creationDate":100000,"key":"u","user":{"key":"u"}}`)
 	})
 
-	t.Run("alias", func(t *testing.T) {
-		event1 := withoutReasons.NewAliasEvent("p", "user", "u", "user")
-		verifyEventOutput(t, defaultFormatter, event1,
-			`{"kind":"alias","creationDate":100000,"contextKind":"user","key":"u","previousContextKind":"user","previousKey":"p"}`)
-
-		event2 := withoutReasons.NewAliasEvent("p", "anonymousUser", "u", "anonymousUser")
-		verifyEventOutput(t, defaultFormatter, event2,
-			`{"kind":"alias","creationDate":100000,"contextKind":"anonymousUser","key":"u","previousContextKind":"anonymousUser","previousKey":"p"}`)
-	})
-
 	t.Run("custom", func(t *testing.T) {
 		event1 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.Null(), false, 0)
 		verifyEventOutput(t, defaultFormatter, event1,
