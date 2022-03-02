@@ -6,15 +6,15 @@ repo:
 
 jobs:
   - docker:
-      image: golang:1.14-buster
+      image: golang:1.16-buster
     template:
       name: go
     env:
-      LD_RELEASE_GO_IMPORT_PATH: gopkg.in/launchdarkly/go-sdk-events.v1
+      LD_RELEASE_GO_IMPORT_PATH: gopkg.in/launchdarkly/go-sdk-events.v2
 
 branches:
   - name: v1
 
 publications:
-  - url: https://godoc.org/gopkg.in/launchdarkly/go-sdk-events.v1
+  - url: https://godoc.org/gopkg.in/launchdarkly/go-sdk-events.v2
     description: documentation
