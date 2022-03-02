@@ -4,18 +4,33 @@ import (
 	"time"
 
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
+	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
 
-const testUserKey = "userKey"
-
-var testValue = ldvalue.String("value")
-var testEvalDetailWithoutReason = ldreason.NewEvaluationDetail(testValue, 2, noReason)
-
 const (
+	testUserKey = "userKey"
+
 	sdkKey = "SDK_KEY"
+
+	fakeBaseURI       = "https://fake-server"
+	fakeEventsURI     = fakeBaseURI + "/bulk"
+	fakeDiagnosticURI = fakeBaseURI + "/diagnostic"
+
+	fakeTime = ldtime.UnixMillisecondTime(100000)
+
+	briefRetryDelay = 50 * time.Millisecond
 )
+
+var (
+	testValue                   = ldvalue.String("value")
+	testEvalDetailWithoutReason = ldreason.NewEvaluationDetail(testValue, 2, noReason)
+	undefInt                    = ldvalue.OptionalInt{}
+	arbitraryJSONData           = []byte(`"hello"`)
+)
+
+func fakeTimeFn() ldtime.UnixMillisecondTime { return fakeTime }
 
 func basicUser() EventUser {
 	return User(lduser.NewUserBuilder(testUserKey).Name("Red").Build())

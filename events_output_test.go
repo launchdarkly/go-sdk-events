@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 
@@ -15,14 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const fakeTime = ldtime.UnixMillisecondTime(100000)
-
 var (
 	withoutReasons = NewEventFactory(false, fakeTimeFn)
 	withReasons    = NewEventFactory(true, fakeTimeFn)
 )
-
-func fakeTimeFn() ldtime.UnixMillisecondTime { return fakeTime }
 
 func TestEventOutputFullEvents(t *testing.T) {
 	userKey := "u"

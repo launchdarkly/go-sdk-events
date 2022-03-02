@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var undefInt = ldvalue.OptionalInt{}
-
 func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string,
 	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) FeatureRequestEvent {
 	return FeatureRequestEvent{
