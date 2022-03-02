@@ -1,6 +1,8 @@
 package ldevents
 
 import (
+	"encoding/json"
+
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
@@ -80,6 +82,12 @@ type IdentifyEvent struct {
 // detail of DefaultEventProcessor, so it is not exported.
 type indexEvent struct {
 	BaseEvent
+}
+
+// rawEvent is used internally when the Relay Proxy needs to inject a JSON event into the outbox that
+// will be sent exactly as is with no processing.
+type rawEvent struct {
+	data json.RawMessage
 }
 
 // EventFactory is a configurable factory for event objects.
@@ -225,4 +233,9 @@ func (evt indexEvent) GetBase() BaseEvent {
 // GetCreationDate returns CreationDate
 func (evt indexEvent) GetCreationDate() ldtime.UnixMillisecondTime {
 	return evt.BaseEvent.CreationDate
+}
+
+// GetCreationDate for a rawEvent is meaningless but is required by the commonEvent interface
+func (evt rawEvent) GetCreationDate() ldtime.UnixMillisecondTime {
+	return 0
 }

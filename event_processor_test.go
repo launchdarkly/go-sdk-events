@@ -408,6 +408,19 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
+func TestRawEventIsQueued(t *testing.T) {
+	ep, es := createEventProcessorAndSender(epDefaultConfig)
+	defer ep.Close()
+
+	rawData := json.RawMessage(`{"kind":"alias","arbitrary":["we","don't","care","what's","in","here"]}`)
+	ep.RecordRawEvent(rawData)
+	ep.Flush()
+	ep.waitUntilInactive()
+
+	assert.Equal(t, ldvalue.Parse(rawData), es.awaitEvent(t))
+	es.assertNoMoreEvents(t)
+}
+
 func TestPeriodicFlush(t *testing.T) {
 	config := epDefaultConfig
 	config.FlushInterval = 10 * time.Millisecond

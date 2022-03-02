@@ -1,6 +1,7 @@
 package ldevents
 
 import (
+	"encoding/json"
 	"sort"
 	"testing"
 
@@ -108,6 +109,12 @@ func TestEventOutputFullEvents(t *testing.T) {
 		event := indexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, User: user}}
 		verifyEventOutput(t, defaultFormatter, event,
 			`{"kind":"index","creationDate":100000,"user":{"key":"u"}}`)
+	})
+
+	t.Run("raw", func(t *testing.T) {
+		rawData := `{"kind":"alias","arbitrary":["we","don't","care","what's","in","here"]}`
+		event := rawEvent{data: json.RawMessage(rawData)}
+		verifyEventOutput(t, defaultFormatter, event, rawData)
 	})
 }
 

@@ -45,6 +45,11 @@ func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary ev
 }
 
 func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEvent) {
+	if raw, ok := evt.(rawEvent); ok {
+		w.Raw(raw.data)
+		return
+	}
+
 	obj := w.Object()
 
 	switch evt := evt.(type) {
