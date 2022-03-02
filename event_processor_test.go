@@ -18,6 +18,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Note about the structure of these tests:
+//
+// 1. It's desirable to keep each test as specific as possible, so that we're not making assertions
+// about many details that are extraneous to the main subject of that test, as long as those details
+// are more specifically covered by another test. So, for instance, tests that are about feature events
+// or custom events are expected to also generate an index event as a side effect, but we should just
+// assert that there is one, rather than checking every property of the index event - since we have
+// TestIndexEventProperties for that purpose. That way, if there is a bug causing an index event
+// property to be wrong, it will show up clearly in that test, rather than causing many failures
+// all over the place.
+//
+// 2. For any tests where the full user JSON will appear in an event, we should use the
+// withAndWithoutPrivateAttrs helper to run the test twice, first with a default configuration and
+// then with an "all attributes private" configuration. This just verifies that it really is using
+// the eventOutputFormatter and eventContextFormatter with the designated configuration when it
+// serializes a user. More specific details of private attribute behavior are covered in the tests for
+// eventOutputFormatter and eventContextFormatter.
+//
+// 3. It's preferable to use the matchers and combinators from the matchers package rather than
+// the assert and require packages whenever there is (a) an assertion involving JSON values or (b)
+// a set of related assertions like "property X equals ___, property Y equals ___" because they
+// provide better failure output.
+
 func withAndWithoutPrivateAttrs(t *testing.T, action func(*testing.T, EventsConfiguration)) {
 	t.Run("without private attributes", func(t *testing.T) {
 		action(t, basicConfigWithoutPrivateAttrs())
@@ -694,5 +717,6 @@ func assertEventsReceived(t *testing.T, es *mockEventSender, matchers ...m.Match
 				len(matchers), jsonhelpers.ToJSONString(received))
 		}
 	}
+	// Use the ItemsInAnyOrder matcher because the exact ordering of events is not significant.
 	m.In(t).Assert(received, m.ItemsInAnyOrder(matchers...))
 }
