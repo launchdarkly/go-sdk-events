@@ -3,9 +3,10 @@ package ldevents
 import (
 	"encoding/json"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldreason"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 
 	"github.com/launchdarkly/go-test-helpers/v2/jsonhelpers"
 	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
@@ -40,36 +41,36 @@ func anySummaryEvent() m.Matcher {
 	return eventKindIs("summary")
 }
 
-func identifyEventForUserKey(key string) m.Matcher {
+func identifyEventForContextKey(key string) m.Matcher {
 	return m.AllOf(
 		eventKindIs("identify"),
-		m.JSONProperty("user").Should(m.JSONProperty("key").Should(m.Equal(key))),
+		m.JSONProperty("context").Should(m.JSONProperty("key").Should(m.Equal(key))),
 	)
 }
 
-func indexEventForUserKey(key string) m.Matcher {
+func indexEventForContextKey(key string) m.Matcher {
 	return m.AllOf(
 		eventKindIs("index"),
-		m.JSONProperty("user").Should(m.JSONProperty("key").Should(m.Equal(key))),
+		m.JSONProperty("context").Should(m.JSONProperty("key").Should(m.Equal(key))),
 	)
 }
 
 func featureEventForFlag(flag FlagEventProperties) m.Matcher {
 	return m.AllOf(
 		m.JSONProperty("kind").Should(m.Equal("feature")),
-		m.JSONProperty("key").Should(m.Equal("flag.GetKey")))
+		m.JSONProperty("key").Should(m.Equal(flag.GetKey())))
 }
 
 func featureEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties) m.Matcher {
 	return matchFeatureOrDebugEvent(sourceEvent, flag, false, nil)
 }
 
-func debugEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties, userJSON interface{}) m.Matcher {
-	return matchFeatureOrDebugEvent(sourceEvent, flag, true, userJSON)
+func debugEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties, contextJSON interface{}) m.Matcher {
+	return matchFeatureOrDebugEvent(sourceEvent, flag, true, contextJSON)
 }
 
 func matchFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties,
-	debug bool, inlineUser interface{}) m.Matcher {
+	debug bool, inlineContext interface{}) m.Matcher {
 	props := map[string]interface{}{
 		"kind":         "feature",
 		"key":          flag.GetKey(),
@@ -87,10 +88,10 @@ func matchFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventPro
 	if sourceEvent.Reason.GetKind() != "" {
 		props["reason"] = json.RawMessage(jsonhelpers.ToJSON(sourceEvent.Reason))
 	}
-	if inlineUser == nil {
-		props["userKey"] = sourceEvent.User.GetKey()
+	if inlineContext == nil {
+		props["contextKeys"] = expectedContextKeys(sourceEvent.Context.Context)
 	} else {
-		props["user"] = inlineUser
+		props["context"] = inlineContext
 	}
 	return m.JSONEqual(props)
 }
@@ -144,4 +145,19 @@ func valueIsPositiveNonZeroInteger() m.Matcher {
 			return "was not an int or was negative"
 		},
 	)
+}
+
+func expectedContextKeys(c ldcontext.Context) map[string]string {
+	if c.Multiple() {
+		ret := make(map[string]string)
+		for i := 0; i < c.MultiKindCount(); i++ {
+			if mc, ok := c.MultiKindByIndex(i); ok {
+				ret[string(mc.Kind())] = mc.Key()
+			}
+		}
+		return ret
+	}
+	return map[string]string{
+		string(c.Kind()): c.Key(),
+	}
 }

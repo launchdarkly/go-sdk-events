@@ -3,10 +3,11 @@ package ldevents
 import (
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldreason"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/lduser"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 )
 
 func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
@@ -22,12 +23,12 @@ func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
 func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B) {
 	events := makeBasicEvents()
 	ef := eventOutputFormatter{
-		userFilter: userFilter{
-			globalPrivateAttributes: []lduser.UserAttribute{
-				lduser.NameAttribute,
-				lduser.UserAttribute("custom-attr"),
+		contextFormatter: *newEventContextFormatter(EventsConfiguration{
+			PrivateAttributes: []ldcontext.AttrRef{
+				ldcontext.NewAttrRef("name"),
+				ldcontext.NewAttrRef("custom-attr"),
 			},
-		},
+		}),
 	}
 	b.ResetTimer()
 
@@ -39,8 +40,8 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 func makeBasicEvents() []commonEvent {
 	baseEvent := BaseEvent{
 		CreationDate: ldtime.UnixMillisNow(),
-		User: EventUser{
-			User: lduser.NewUserBuilder("user-key").
+		Context: EventContext{
+			Context: lduser.NewUserBuilder("user-key").
 				Email("test@example.com").
 				Name("user-name").
 				Custom("custom-attr", ldvalue.Bool(true)).
@@ -70,7 +71,7 @@ func makeBasicEvents() []commonEvent {
 }
 
 func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
-	user := User(lduser.NewUser("u"))
+	user := Context(lduser.NewUser("u"))
 	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
 	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")

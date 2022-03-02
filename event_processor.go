@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldlog"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 )
 
 type defaultEventProcessor struct {
@@ -19,17 +19,17 @@ type defaultEventProcessor struct {
 }
 
 type eventDispatcher struct {
-	config             EventsConfiguration
-	outbox             *eventsOutbox
-	flushCh            chan *flushPayload
-	workersGroup       *sync.WaitGroup
-	userKeys           lruCache
-	lastKnownPastTime  ldtime.UnixMillisecondTime
-	deduplicatedUsers  int
-	eventsInLastBatch  int
-	disabled           bool
-	currentTimestampFn func() ldtime.UnixMillisecondTime
-	stateLock          sync.Mutex
+	config               EventsConfiguration
+	outbox               *eventsOutbox
+	flushCh              chan *flushPayload
+	workersGroup         *sync.WaitGroup
+	userKeys             lruCache
+	lastKnownPastTime    ldtime.UnixMillisecondTime
+	deduplicatedContexts int
+	eventsInLastBatch    int
+	disabled             bool
+	currentTimestampFn   func() ldtime.UnixMillisecondTime
+	stateLock            sync.Mutex
 }
 
 type flushPayload struct {
@@ -134,10 +134,15 @@ func startEventDispatcher(
 		ed.currentTimestampFn = ldtime.UnixMillisNow
 	}
 
+	formatter := &eventOutputFormatter{
+		contextFormatter: *newEventContextFormatter(config),
+		config:           config,
+	}
+
 	// Start a fixed-size pool of workers that wait on flushTriggerCh. This is the
 	// maximum number of flushes we can do concurrently.
 	for i := 0; i < maxFlushWorkers; i++ {
-		go runFlushTask(config, ed.flushCh, ed.workersGroup, ed.handleResult)
+		go runFlushTask(config, formatter, ed.flushCh, ed.workersGroup, ed.handleResult)
 	}
 	if config.DiagnosticsManager != nil {
 		event := config.DiagnosticsManager.CreateInitEvent()
@@ -219,11 +224,11 @@ func (ed *eventDispatcher) runMainLoop(
 			}
 			event := diagnosticsManager.CreateStatsEventAndReset(
 				ed.outbox.droppedEvents,
-				ed.deduplicatedUsers,
+				ed.deduplicatedContexts,
 				ed.eventsInLastBatch,
 			)
 			ed.outbox.droppedEvents = 0
-			ed.deduplicatedUsers = 0
+			ed.deduplicatedContexts = 0
 			ed.eventsInLastBatch = 0
 			ed.sendDiagnosticsEvent(event)
 		}
@@ -256,16 +261,15 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 		ed.outbox.addEvent(evt)
 		return
 	}
-	// For each user we haven't seen before, we add an index event before the event that referenced
-	// the user - unless the event must contain an inline user (i.e. if InlineUsersInEvents is true,
-	// or if it is an identify event).
-	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().User.GetKey())
+	// For each context we haven't seen before, we add an index event before the event that referenced
+	// the context - unless the original event will contain an inline context (e.g. an identify event).
+	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().Context.Context.FullyQualifiedKey())
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
-			ed.deduplicatedUsers++
+			ed.deduplicatedContexts++
 		} else {
 			indexEvent := indexEvent{
-				BaseEvent{CreationDate: baseEvent.GetBase().CreationDate, User: baseEvent.GetBase().User},
+				BaseEvent{CreationDate: baseEvent.GetBase().CreationDate, Context: baseEvent.GetBase().Context},
 			}
 			ed.outbox.addEvent(indexEvent)
 		}
@@ -360,12 +364,8 @@ func (ed *eventDispatcher) sendDiagnosticsEvent(
 	}
 }
 
-func runFlushTask(config EventsConfiguration, flushCh <-chan *flushPayload,
+func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
 	workersGroup *sync.WaitGroup, resultFn func(EventSenderResult)) {
-	formatter := eventOutputFormatter{
-		userFilter: newUserFilter(config),
-		config:     config,
-	}
 	for {
 		payload, more := <-flushCh
 		if !more {

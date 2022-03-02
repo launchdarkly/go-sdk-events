@@ -2,7 +2,8 @@ package ldevents
 
 import (
 	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
 )
 
 // In this file we create the analytics event JSON data that we send to LaunchDarkly. This does not
@@ -19,8 +20,8 @@ const (
 )
 
 type eventOutputFormatter struct {
-	userFilter userFilter
-	config     EventsConfiguration
+	contextFormatter eventContextFormatter
+	config           EventsConfiguration
 }
 
 func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary eventSummary) ([]byte, int) {
@@ -61,11 +62,10 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
-		writeContextKind(&obj, evt.User.GetAnonymous())
 		if evt.Debug {
-			ef.userFilter.writeUser(obj.Name("user"), evt.User)
+			ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 		} else {
-			obj.Name("userKey").String(evt.User.GetKey())
+			writeContextKeys(&obj, &evt.Context.Context)
 		}
 		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
 		evt.Value.WriteToJSONWriter(obj.Name("value"))
@@ -81,18 +81,16 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		if !evt.Data.IsNull() {
 			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
-		writeContextKind(&obj, evt.User.GetAnonymous())
-		obj.Name("userKey").String(evt.User.GetKey())
+		writeContextKeys(&obj, &evt.Context.Context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
 	case IdentifyEvent:
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
-		obj.Name("key").String(evt.User.GetKey())
-		ef.userFilter.writeUser(obj.Name("user"), evt.User)
+		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
-		ef.userFilter.writeUser(obj.Name("user"), evt.User)
+		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 	}
 
 	obj.End()
@@ -103,8 +101,18 @@ func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime
 	obj.Name("creationDate").Float64(float64(creationDate))
 }
 
-func writeContextKind(obj *jwriter.ObjectState, anonymous bool) {
-	obj.Maybe("contextKind", anonymous).String("anonymousUser")
+func writeContextKeys(obj *jwriter.ObjectState, c *ldcontext.Context) {
+	keysObj := obj.Name("contextKeys").Object()
+	if c.Multiple() {
+		for i := 0; i < c.MultiKindCount(); i++ {
+			if mc, ok := c.MultiKindByIndex(i); ok {
+				keysObj.Name(string(mc.Kind())).String(mc.Key())
+			}
+		}
+	} else {
+		keysObj.Name(string(c.Kind())).String(c.Key())
+	}
+	keysObj.End()
 }
 
 // Transforms the summary data into the format used for event sending.
