@@ -10,4 +10,4 @@ require (
 	gopkg.in/launchdarkly/go-sdk-common.v3 v3.0.0
 )
 
-replace gopkg.in/launchdarkly/go-sdk-common.v3 => github.com/launchdarkly/go-sdk-common-private/v3 v3.0.0-alpha.2
+replace gopkg.in/launchdarkly/go-sdk-common.v3 => github.com/launchdarkly/go-sdk-common-private/v3 v3.0.0-alpha.3

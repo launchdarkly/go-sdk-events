@@ -4,6 +4,7 @@ import (
 	"sort"
 	"testing"
 
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldattr"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 
@@ -34,9 +35,9 @@ func TestEventContextFormatterConstructor(t *testing.T) {
 	})
 
 	t.Run("top-level private", func(t *testing.T) {
-		private1, private2 := ldcontext.NewAttrRef("name"), ldcontext.NewAttrRef("email")
+		private1, private2 := ldattr.NewRef("name"), ldattr.NewRef("email")
 		f := newEventContextFormatter(EventsConfiguration{
-			PrivateAttributes: []ldcontext.AttrRef{private1, private2},
+			PrivateAttributes: []ldattr.Ref{private1, private2},
 		})
 		require.NotNil(t, f)
 
@@ -51,10 +52,10 @@ func TestEventContextFormatterConstructor(t *testing.T) {
 	})
 
 	t.Run("nested private", func(t *testing.T) {
-		private1, private2, private3 := ldcontext.NewAttrRef("/name"),
-			ldcontext.NewAttrRef("/address/street"), ldcontext.NewAttrRef("/address/city")
+		private1, private2, private3 := ldattr.NewRef("/name"),
+			ldattr.NewRef("/address/street"), ldattr.NewRef("/address/city")
 		f := newEventContextFormatter(EventsConfiguration{
-			PrivateAttributes: []ldcontext.AttrRef{private1, private2, private3},
+			PrivateAttributes: []ldattr.Ref{private1, private2, private3},
 		})
 		require.NotNil(t, f)
 
@@ -75,7 +76,7 @@ func TestEventContextFormatterConstructor(t *testing.T) {
 }
 
 func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
-	expectResult := func(t *testing.T, f *eventContextFormatter, expectRedactedAttr *ldcontext.AttrRef, expectHasNested bool, path ...string) {
+	expectResult := func(t *testing.T, f *eventContextFormatter, expectRedactedAttr *ldattr.Ref, expectHasNested bool, path ...string) {
 		redactedAttr, hasNested := f.checkGlobalPrivateAttrRefs(path)
 		assert.Equal(t, expectRedactedAttr, redactedAttr)
 		assert.Equal(t, expectHasNested, hasNested)
@@ -90,9 +91,9 @@ func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
 	})
 
 	t.Run("top-level private", func(t *testing.T) {
-		attrRef1, attrRef2 := ldcontext.NewAttrRef("name"), ldcontext.NewAttrRef("email")
+		attrRef1, attrRef2 := ldattr.NewRef("name"), ldattr.NewRef("email")
 		f := newEventContextFormatter(EventsConfiguration{
-			PrivateAttributes: []ldcontext.AttrRef{attrRef1, attrRef2},
+			PrivateAttributes: []ldattr.Ref{attrRef1, attrRef2},
 		})
 		require.NotNil(t, f)
 
@@ -103,10 +104,10 @@ func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
 	})
 
 	t.Run("nested private", func(t *testing.T) {
-		attrRef1, attrRef2, attrRef3 := ldcontext.NewAttrRef("name"),
-			ldcontext.NewAttrRef("/address/street"), ldcontext.NewAttrRef("/address/city")
+		attrRef1, attrRef2, attrRef3 := ldattr.NewRef("name"),
+			ldattr.NewRef("/address/street"), ldattr.NewRef("/address/city")
 		f := newEventContextFormatter(EventsConfiguration{
-			PrivateAttributes: []ldcontext.AttrRef{attrRef1, attrRef2, attrRef3},
+			PrivateAttributes: []ldattr.Ref{attrRef1, attrRef2, attrRef3},
 		})
 		require.NotNil(t, f)
 
@@ -205,8 +206,8 @@ func TestEventContextFormatterOutput(t *testing.T) {
 				SetString("attr1", "value1").
 				SetValue("address", objectValue).
 				Build(),
-			EventsConfiguration{PrivateAttributes: []ldcontext.AttrRef{
-				ldcontext.NewAttrRef("/name"), ldcontext.NewAttrRef("/address")}},
+			EventsConfiguration{PrivateAttributes: []ldattr.Ref{
+				ldattr.NewRef("/name"), ldattr.NewRef("/address")}},
 			`{"kind": "org", "key": "my-key", "attr1": "value1",
 				"_meta": {"redactedAttributes": ["/address", "/name"]}}`,
 		},
@@ -224,8 +225,8 @@ func TestEventContextFormatterOutput(t *testing.T) {
 					SetString("attr3", "value3").
 					Build(),
 			),
-			EventsConfiguration{PrivateAttributes: []ldcontext.AttrRef{
-				ldcontext.NewAttrRef("/name"), ldcontext.NewAttrRef("/attr1"), ldcontext.NewAttrRef("/attr3")}},
+			EventsConfiguration{PrivateAttributes: []ldattr.Ref{
+				ldattr.NewRef("/name"), ldattr.NewRef("/attr1"), ldattr.NewRef("/attr3")}},
 			`{"kind": "multi",
 			    "org": {"key": "org-key", "attr2": "value2", "_meta": {"redactedAttributes": ["/attr1", "/name"]}},
 				"user": {"key": "user-key", "_meta": {"redactedAttributes": ["/attr1", "/attr3", "/name"]}}}`,
@@ -267,7 +268,7 @@ func TestEventContextFormatterOutput(t *testing.T) {
 				Name("my-name").
 				SetValue("address", objectValue).
 				Build(),
-			EventsConfiguration{PrivateAttributes: []ldcontext.AttrRef{ldcontext.NewAttrRef("/address/city")}},
+			EventsConfiguration{PrivateAttributes: []ldattr.Ref{ldattr.NewRef("/address/city")}},
 			`{"kind": "org", "key": "my-key",
 				"name": "my-name", "address": {"state": "CA"},
 				"_meta": {"redactedAttributes": ["/address/city"]}}`,
@@ -277,7 +278,7 @@ func TestEventContextFormatterOutput(t *testing.T) {
 			ldcontext.NewBuilder("my-key").Kind("org").
 				Name("my-name").
 				SetValue("address", objectValue).
-				PrivateRef(ldcontext.NewAttrRef("/address/city"), ldcontext.NewAttrRef("/name")).
+				PrivateRef(ldattr.NewRef("/address/city"), ldattr.NewRef("/name")).
 				Build(),
 			EventsConfiguration{},
 			`{"kind": "org", "key": "my-key", "address": {"state": "CA"},
@@ -288,7 +289,7 @@ func TestEventContextFormatterOutput(t *testing.T) {
 			ldcontext.NewBuilder("my-key").Kind("org").
 				Name("my-name").
 				SetValue("address", objectValue).
-				PrivateRef(ldcontext.NewAttrRef("/address/city"), ldcontext.NewAttrRef("/address")).
+				PrivateRef(ldattr.NewRef("/address/city"), ldattr.NewRef("/address")).
 				Build(),
 			EventsConfiguration{},
 			`{"kind": "org", "key": "my-key",

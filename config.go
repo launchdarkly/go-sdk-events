@@ -3,7 +3,7 @@ package ldevents
 import (
 	"time"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldattr"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldlog"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
 )
@@ -44,7 +44,7 @@ type EventsConfiguration struct {
 	LogUserKeyInErrors bool
 	// PrivateAttributes is a list of attribute references (either simple names, or slash-delimited
 	// paths) that should be considered private.
-	PrivateAttributes []ldcontext.AttrRef
+	PrivateAttributes []ldattr.Ref
 	// The number of user keys that the event processor can remember at any one time, so that
 	// duplicate user details will not be sent in analytics events.
 	UserKeysCapacity int

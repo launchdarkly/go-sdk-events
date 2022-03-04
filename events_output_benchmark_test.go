@@ -3,7 +3,7 @@ package ldevents
 import (
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldattr"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/lduser"
@@ -24,9 +24,9 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 	events := makeBasicEvents()
 	ef := eventOutputFormatter{
 		contextFormatter: *newEventContextFormatter(EventsConfiguration{
-			PrivateAttributes: []ldcontext.AttrRef{
-				ldcontext.NewAttrRef("name"),
-				ldcontext.NewAttrRef("custom-attr"),
+			PrivateAttributes: []ldattr.Ref{
+				ldattr.NewNameRef("name"),
+				ldattr.NewNameRef("custom-attr"),
 			},
 		}),
 	}

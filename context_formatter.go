@@ -1,6 +1,7 @@
 package ldevents
 
 import (
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldattr"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
 	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 
@@ -16,7 +17,7 @@ type eventContextFormatter struct {
 }
 
 type privateAttrLookupNode struct {
-	attribute *ldcontext.AttrRef
+	attribute *ldattr.Ref
 	children  map[string]*privateAttrLookupNode
 }
 
@@ -34,7 +35,7 @@ func newEventContextFormatter(config EventsConfiguration) *eventContextFormatter
 	return ret
 }
 
-func makePrivateAttrLookupData(attrRefList []ldcontext.AttrRef) map[string]*privateAttrLookupNode {
+func makePrivateAttrLookupData(attrRefList []ldattr.Ref) map[string]*privateAttrLookupNode {
 	// This function transforms a list of AttrRefs into a data structure that allows for more efficient
 	// implementation of eventContextFormatter.checkGloballyPrivate().
 	//
@@ -95,10 +96,10 @@ func (f *eventContextFormatter) WriteContext(w *jwriter.Writer, ec *EventContext
 func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c *ldcontext.Context, includeKind bool) {
 	obj := w.Object()
 	if includeKind {
-		obj.Name(ldcontext.AttrNameKind).String(string(c.Kind()))
+		obj.Name(ldattr.KindAttr).String(string(c.Kind()))
 	}
 
-	obj.Name(ldcontext.AttrNameKey).String(c.Key())
+	obj.Name(ldattr.KeyAttr).String(c.Key())
 
 	optionalAttrNames := make([]string, 0, 20) // arbitrary capacity, expanded if necessary by GetOptionalAttributeNames
 	redactedAttrs := make([]string, 0, 20)
@@ -110,7 +111,7 @@ func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c 
 			if f.allAttributesPrivate {
 				// If allAttributesPrivate is true, then there's no complex filtering or recursing to be done: all of
 				// these values are by definition private, so just add their names to the redacted list.
-				escapedAttrName := ldcontext.NewAttrRefForName(key).String()
+				escapedAttrName := ldattr.NewNameRef(key).String()
 				redactedAttrs = append(redactedAttrs, escapedAttrName)
 				continue
 			}
@@ -120,7 +121,7 @@ func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c 
 	}
 
 	if c.Transient() {
-		obj.Name(ldcontext.AttrNameTransient).Bool(true)
+		obj.Name(ldattr.TransientAttr).Bool(true)
 	}
 
 	if c.Secondary().IsDefined() || len(redactedAttrs) != 0 {
@@ -143,7 +144,7 @@ func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c 
 
 func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, c *ldcontext.Context) {
 	obj := w.Object()
-	obj.Name(ldcontext.AttrNameKind).String(string(ldcontext.MultiKind))
+	obj.Name(ldattr.KindAttr).String(string(ldcontext.MultiKind))
 
 	for i := 0; i < c.MultiKindCount(); i++ {
 		mc, _ := c.MultiKindByIndex(i)
@@ -295,7 +296,7 @@ func (f *eventContextFormatter) maybeRedact(
 // attribute reference for *children* of attrPath (and there is not one for attrPath itself, since if
 // there was, we would not bother recursing to write the children). See comments on writeFilteredAttribute.
 func (f eventContextFormatter) checkGlobalPrivateAttrRefs(attrPath []string) (
-	redactedAttrRef *ldcontext.AttrRef, nestedPropertiesAreRedacted bool,
+	redactedAttrRef *ldattr.Ref, nestedPropertiesAreRedacted bool,
 ) {
 	redactedAttrRef = nil
 	nestedPropertiesAreRedacted = false
