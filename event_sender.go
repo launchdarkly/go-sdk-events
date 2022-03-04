@@ -18,7 +18,7 @@ const (
 	defaultEventsURI   = "https://events.launchdarkly.com"
 	eventSchemaHeader  = "X-LaunchDarkly-Event-Schema"
 	payloadIDHeader    = "X-LaunchDarkly-Payload-ID"
-	currentEventSchema = "3"
+	currentEventSchema = "4"
 )
 
 type defaultEventSender struct {
