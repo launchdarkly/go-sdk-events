@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var defaultEventFactory = NewEventFactory(false, nil)
@@ -40,7 +40,7 @@ func TestEventFactory(t *testing.T) {
 	timeFn := func() ldtime.UnixMillisecondTime { return fakeTime }
 	withoutReasons := NewEventFactory(false, timeFn)
 	withReasons := NewEventFactory(true, timeFn)
-	user := User(lduser.NewUser("u"))
+	user := User(lduser.NewUser("key"))
 
 	t.Run("NewSuccessfulEvalEvent", func(t *testing.T) {
 		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
@@ -183,6 +183,9 @@ func TestEventFactory(t *testing.T) {
 }
 
 func TestPropertiesOfEventTypesNotFromFactory(t *testing.T) {
+	fakeTime := ldtime.UnixMillisecondTime(100000)
+	user := User(lduser.NewUser("key"))
+
 	t.Run("indexEvent", func(t *testing.T) {
 		ie := indexEvent{
 			BaseEvent: BaseEvent{

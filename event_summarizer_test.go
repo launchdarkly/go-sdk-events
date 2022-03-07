@@ -3,20 +3,17 @@ package ldevents
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
-)
 
-var user = EventUser{lduser.NewUser("key"), nil}
-var undefInt = ldvalue.OptionalInt{}
+	"github.com/stretchr/testify/assert"
+)
 
 func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string,
 	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) FeatureRequestEvent {
 	return FeatureRequestEvent{
-		BaseEvent: BaseEvent{CreationDate: creationDate, User: user},
+		BaseEvent: BaseEvent{CreationDate: creationDate, User: User(lduser.NewUser("key"))},
 		Key:       flagKey,
 		Version:   flagVersion,
 		Variation: variation,
@@ -64,10 +61,10 @@ func TestSummarizeEventIncrementsCounters(t *testing.T) {
 	data := es.snapshot()
 
 	expectedCounters := map[counterKey]*counterValue{
-		counterKey{flagKey1, variation1, flagVersion1}: &counterValue{2, ldvalue.String("value1"), ldvalue.String("default1")},
-		counterKey{flagKey1, variation2, flagVersion1}: &counterValue{1, ldvalue.String("value2"), ldvalue.String("default1")},
-		counterKey{flagKey2, variation1, flagVersion2}: &counterValue{1, ldvalue.String("value99"), ldvalue.String("default2")},
-		counterKey{unknownFlagKey, undefInt, undefInt}: &counterValue{1, ldvalue.String("default3"), ldvalue.String("default3")},
+		{flagKey1, variation1, flagVersion1}: {2, ldvalue.String("value1"), ldvalue.String("default1")},
+		{flagKey1, variation2, flagVersion1}: {1, ldvalue.String("value2"), ldvalue.String("default1")},
+		{flagKey2, variation1, flagVersion2}: {1, ldvalue.String("value99"), ldvalue.String("default2")},
+		{unknownFlagKey, undefInt, undefInt}: {1, ldvalue.String("default3"), ldvalue.String("default3")},
 	}
 	assert.Equal(t, expectedCounters, data.counters)
 }
@@ -87,9 +84,9 @@ func TestCounterForNilVariationIsDistinctFromOthers(t *testing.T) {
 	data := es.snapshot()
 
 	expectedCounters := map[counterKey]*counterValue{
-		counterKey{flagKey, variation1, flagVersion}: &counterValue{1, ldvalue.String("value1"), ldvalue.String("default1")},
-		counterKey{flagKey, variation2, flagVersion}: &counterValue{1, ldvalue.String("value2"), ldvalue.String("default1")},
-		counterKey{flagKey, undefInt, flagVersion}:   &counterValue{1, ldvalue.String("default1"), ldvalue.String("default1")},
+		{flagKey, variation1, flagVersion}: {1, ldvalue.String("value1"), ldvalue.String("default1")},
+		{flagKey, variation2, flagVersion}: {1, ldvalue.String("value2"), ldvalue.String("default1")},
+		{flagKey, undefInt, flagVersion}:   {1, ldvalue.String("default1"), ldvalue.String("default1")},
 	}
 	assert.Equal(t, expectedCounters, data.counters)
 }

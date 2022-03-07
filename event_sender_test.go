@@ -6,21 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/launchdarkly/go-test-helpers/v2/httphelpers"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
 	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-)
 
-const (
-	fakeBaseURI       = "https://fake-server"
-	fakeEventsURI     = fakeBaseURI + "/bulk"
-	fakeDiagnosticURI = fakeBaseURI + "/diagnostic"
-	briefRetryDelay   = 50 * time.Millisecond
+	"github.com/stretchr/testify/assert"
 )
-
-var fakeEventData = []byte("hello")
 
 type errorInfo struct {
 	status int
@@ -59,31 +50,31 @@ func TestNewDefaultEventSender(t *testing.T) {
 func TestDataIsSentToAnalyticsURI(t *testing.T) {
 	es, requestsCh := makeEventSenderWithRequestSink()
 
-	result := es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+	result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 	assert.True(t, result.Success)
 
 	assert.Equal(t, 1, len(requestsCh))
 	r := <-requestsCh
 	assert.Equal(t, fakeEventsURI, r.Request.URL.String())
-	assert.Equal(t, fakeEventData, r.Body)
+	assert.Equal(t, arbitraryJSONData, r.Body)
 }
 
 func TestDataIsSentToDiagnosticURI(t *testing.T) {
 	es, requestsCh := makeEventSenderWithRequestSink()
 
-	result := es.SendEventData(DiagnosticEventDataKind, fakeEventData, 1)
+	result := es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
 	assert.True(t, result.Success)
 
 	assert.Equal(t, 1, len(requestsCh))
 	r := <-requestsCh
 	assert.Equal(t, fakeDiagnosticURI, r.Request.URL.String())
-	assert.Equal(t, fakeEventData, r.Body)
+	assert.Equal(t, arbitraryJSONData, r.Body)
 }
 
 func TestUnknownDataKindIsIgnored(t *testing.T) {
 	es, requestsCh := makeEventSenderWithRequestSink()
 
-	result := es.SendEventData(EventDataKind("not valid"), fakeEventData, 1)
+	result := es.SendEventData(EventDataKind("not valid"), arbitraryJSONData, 1)
 	assert.False(t, result.Success)
 	assert.False(t, result.MustShutDown)
 	assert.Len(t, requestsCh, 0)
@@ -92,8 +83,8 @@ func TestUnknownDataKindIsIgnored(t *testing.T) {
 func TestAnalyticsEventsHaveSchemaAndPayloadIDHeaders(t *testing.T) {
 	es, requestsCh := makeEventSenderWithRequestSink()
 
-	es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
-	es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
+	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 	assert.Equal(t, 2, len(requestsCh))
 	r0 := <-requestsCh
@@ -112,7 +103,7 @@ func TestAnalyticsEventsHaveSchemaAndPayloadIDHeaders(t *testing.T) {
 func TestDiagnosticEventsDoNotHaveSchemaOrPayloadID(t *testing.T) {
 	es, requestsCh := makeEventSenderWithRequestSink()
 
-	es.SendEventData(DiagnosticEventDataKind, fakeEventData, 1)
+	es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
 
 	assert.Equal(t, 1, len(requestsCh))
 	r := <-requestsCh
@@ -127,7 +118,7 @@ func TestEventSenderParsesTimeFromServer(t *testing.T) {
 	handler := httphelpers.HandlerWithResponse(202, headers, nil)
 	es := makeEventSenderWithHTTPClient(httphelpers.ClientFromHandler(handler))
 
-	result := es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+	result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 	assert.True(t, result.Success)
 	assert.Equal(t, expectedTime, result.TimeFromServer)
 }
@@ -144,7 +135,7 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 			)
 			es := makeEventSenderWithHTTPClient(httphelpers.ClientFromHandler(handler))
 
-			result := es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+			result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 			assert.True(t, result.Success)
 			assert.False(t, result.MustShutDown)
@@ -152,8 +143,8 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 			assert.Equal(t, 2, len(requestsCh))
 			r0 := <-requestsCh
 			r1 := <-requestsCh
-			assert.Equal(t, fakeEventData, r0.Body)
-			assert.Equal(t, fakeEventData, r1.Body)
+			assert.Equal(t, arbitraryJSONData, r0.Body)
+			assert.Equal(t, arbitraryJSONData, r1.Body)
 			id0 := r0.Request.Header.Get(payloadIDHeader)
 			assert.NotEqual(t, "", id0)
 			assert.Equal(t, id0, r1.Request.Header.Get(payloadIDHeader))
@@ -169,7 +160,7 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 			)
 			es := makeEventSenderWithHTTPClient(httphelpers.ClientFromHandler(handler))
 
-			result := es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+			result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 			assert.False(t, result.Success)
 			assert.False(t, result.MustShutDown)
@@ -177,8 +168,8 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 			assert.Equal(t, 2, len(requestsCh))
 			r0 := <-requestsCh
 			r1 := <-requestsCh
-			assert.Equal(t, fakeEventData, r0.Body)
-			assert.Equal(t, fakeEventData, r1.Body)
+			assert.Equal(t, arbitraryJSONData, r0.Body)
+			assert.Equal(t, arbitraryJSONData, r1.Body)
 			id0 := r0.Request.Header.Get(payloadIDHeader)
 			assert.NotEqual(t, "", id0)
 			assert.Equal(t, id0, r1.Request.Header.Get(payloadIDHeader))
@@ -198,14 +189,14 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 			)
 			es := makeEventSenderWithHTTPClient(httphelpers.ClientFromHandler(handler))
 
-			result := es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+			result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 			assert.False(t, result.Success)
 			assert.True(t, result.MustShutDown)
 
 			assert.Equal(t, 1, len(requestsCh))
 			r := <-requestsCh
-			assert.Equal(t, fakeEventData, r.Body)
+			assert.Equal(t, arbitraryJSONData, r.Body)
 		})
 	}
 }
@@ -221,8 +212,8 @@ func TestServerSideSenderSetsURIsFromBase(t *testing.T) {
 	client := httphelpers.ClientFromHandler(handler)
 	es := NewServerSideEventSender(client, sdkKey, fakeBaseURI, nil, ldlog.NewDisabledLoggers())
 
-	es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
-	es.SendEventData(DiagnosticEventDataKind, fakeEventData, 1)
+	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
+	es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
 
 	assert.Equal(t, 2, len(requestsCh))
 	r0 := <-requestsCh
@@ -236,8 +227,8 @@ func TestServerSideSenderHasDefaultBaseURI(t *testing.T) {
 	client := httphelpers.ClientFromHandler(handler)
 	es := NewServerSideEventSender(client, sdkKey, "", nil, ldlog.NewDisabledLoggers())
 
-	es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
-	es.SendEventData(DiagnosticEventDataKind, fakeEventData, 1)
+	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
+	es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
 
 	assert.Equal(t, 2, len(requestsCh))
 	r0 := <-requestsCh
@@ -253,7 +244,7 @@ func TestServerSideSenderAddsAuthorizationHeader(t *testing.T) {
 	extraHeaders.Set("my-header", "my-value")
 	es := NewServerSideEventSender(client, sdkKey, fakeBaseURI, extraHeaders, ldlog.NewDisabledLoggers())
 
-	es.SendEventData(AnalyticsEventDataKind, fakeEventData, 1)
+	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 	assert.Equal(t, 1, len(requestsCh))
 	r := <-requestsCh
