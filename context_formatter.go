@@ -25,8 +25,8 @@ type privateAttrLookupNode struct {
 //
 // An instance of this type is owned by the eventOutputFormatter that is responsible for writing all
 // JSON event data. It is created at SDK initialization time based on the SDK configuration.
-func newEventContextFormatter(config EventsConfiguration) *eventContextFormatter {
-	ret := &eventContextFormatter{allAttributesPrivate: config.AllAttributesPrivate}
+func newEventContextFormatter(config EventsConfiguration) eventContextFormatter {
+	ret := eventContextFormatter{allAttributesPrivate: config.AllAttributesPrivate}
 	if len(config.PrivateAttributes) != 0 {
 		// Reformat the list of private attributes into a map structure that will allow
 		// for faster lookups.

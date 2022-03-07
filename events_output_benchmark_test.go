@@ -23,7 +23,7 @@ func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
 func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B) {
 	events := makeBasicEvents()
 	ef := eventOutputFormatter{
-		contextFormatter: *newEventContextFormatter(EventsConfiguration{
+		contextFormatter: newEventContextFormatter(EventsConfiguration{
 			PrivateAttributes: []ldattr.Ref{
 				ldattr.NewNameRef("name"),
 				ldattr.NewNameRef("custom-attr"),

@@ -76,7 +76,7 @@ func TestEventContextFormatterConstructor(t *testing.T) {
 }
 
 func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
-	expectResult := func(t *testing.T, f *eventContextFormatter, expectRedactedAttr *ldattr.Ref, expectHasNested bool, path ...string) {
+	expectResult := func(t *testing.T, f eventContextFormatter, expectRedactedAttr *ldattr.Ref, expectHasNested bool, path ...string) {
 		redactedAttr, hasNested := f.checkGlobalPrivateAttrRefs(path)
 		assert.Equal(t, expectRedactedAttr, redactedAttr)
 		assert.Equal(t, expectHasNested, hasNested)

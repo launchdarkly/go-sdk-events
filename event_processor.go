@@ -135,7 +135,7 @@ func startEventDispatcher(
 	}
 
 	formatter := &eventOutputFormatter{
-		contextFormatter: *newEventContextFormatter(config),
+		contextFormatter: newEventContextFormatter(config),
 		config:           config,
 	}
 

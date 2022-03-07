@@ -49,7 +49,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
 
 		formatter := eventOutputFormatter{
-			contextFormatter: *newEventContextFormatter(config),
+			contextFormatter: newEventContextFormatter(config),
 			config:           config,
 		}
 
@@ -218,7 +218,7 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	flag2Default := ldvalue.String("default2")
 
 	formatter := eventOutputFormatter{
-		contextFormatter: *newEventContextFormatter(basicConfigWithoutPrivateAttrs()),
+		contextFormatter: newEventContextFormatter(basicConfigWithoutPrivateAttrs()),
 		config:           basicConfigWithoutPrivateAttrs(),
 	}
 
