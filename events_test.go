@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldreason"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -40,7 +40,7 @@ func TestEventFactory(t *testing.T) {
 	timeFn := func() ldtime.UnixMillisecondTime { return fakeTime }
 	withoutReasons := NewEventFactory(false, timeFn)
 	withReasons := NewEventFactory(true, timeFn)
-	user := User(lduser.NewUser("key"))
+	context := Context(ldcontext.New("key"))
 
 	t.Run("NewSuccessfulEvalEvent", func(t *testing.T) {
 		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
@@ -48,7 +48,7 @@ func TestEventFactory(t *testing.T) {
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 			Key:       flag.Key,
 			Version:   ldvalue.NewOptionalInt(flag.Version),
@@ -59,14 +59,14 @@ func TestEventFactory(t *testing.T) {
 			PrereqOf:  ldvalue.NewOptionalString("pre"),
 		}
 
-		event1 := withoutReasons.NewEvalEvent(flag, user,
+		event1 := withoutReasons.NewEvalEvent(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
 			expected.Default, "pre")
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 
-		event2 := withReasons.NewEvalEvent(flag, user,
+		event2 := withReasons.NewEvalEvent(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
 			expected.Default, "pre")
 		assert.Equal(t, expected, event2)
@@ -78,7 +78,7 @@ func TestEventFactory(t *testing.T) {
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 			Key:       flag.Key,
 			Version:   ldvalue.NewOptionalInt(flag.Version),
@@ -91,7 +91,7 @@ func TestEventFactory(t *testing.T) {
 		flag1.TrackEvents = true
 		expected1 := expected
 		expected1.TrackEvents = true
-		event1 := withoutReasons.NewEvalEvent(flag1, user,
+		event1 := withoutReasons.NewEvalEvent(flag1, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			expected.Default, "")
 		assert.Equal(t, expected1, event1)
@@ -100,7 +100,7 @@ func TestEventFactory(t *testing.T) {
 		flag2.DebugEventsUntilDate = ldtime.UnixMillisecondTime(200000)
 		expected2 := expected
 		expected2.DebugEventsUntilDate = flag2.DebugEventsUntilDate
-		event2 := withoutReasons.NewEvalEvent(flag2, user,
+		event2 := withoutReasons.NewEvalEvent(flag2, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			expected.Default, "")
 		assert.Equal(t, expected2, event2)
@@ -112,7 +112,7 @@ func TestEventFactory(t *testing.T) {
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 			Key:         flag.Key,
 			Version:     ldvalue.NewOptionalInt(flag.Version),
@@ -123,7 +123,7 @@ func TestEventFactory(t *testing.T) {
 			TrackEvents: true,
 		}
 
-		event := withoutReasons.NewEvalEvent(flag, user,
+		event := withoutReasons.NewEvalEvent(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			expected.Default, "")
 		assert.Equal(t, expected, event)
@@ -133,7 +133,7 @@ func TestEventFactory(t *testing.T) {
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 			Key:     "unknown-key",
 			Value:   ldvalue.String("default"),
@@ -141,13 +141,13 @@ func TestEventFactory(t *testing.T) {
 			Reason:  ldreason.NewEvalReasonFallthrough(),
 		}
 
-		event1 := withoutReasons.NewUnknownFlagEvent(expected.Key, user, expected.Default, expected.Reason)
+		event1 := withoutReasons.NewUnknownFlagEvent(expected.Key, context, expected.Default, expected.Reason)
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event1.GetCreationDate())
 
-		event2 := withReasons.NewUnknownFlagEvent(expected.Key, user, expected.Default, expected.Reason)
+		event2 := withReasons.NewUnknownFlagEvent(expected.Key, context, expected.Default, expected.Reason)
 		assert.Equal(t, expected, event2)
 	})
 
@@ -155,7 +155,7 @@ func TestEventFactory(t *testing.T) {
 		expected := CustomEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 			Key:         "event-key",
 			Data:        ldvalue.String("data"),
@@ -163,7 +163,7 @@ func TestEventFactory(t *testing.T) {
 			MetricValue: 2,
 		}
 
-		event := withoutReasons.NewCustomEvent(expected.Key, user, expected.Data, true, expected.MetricValue)
+		event := withoutReasons.NewCustomEvent(expected.Key, context, expected.Data, true, expected.MetricValue)
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})
@@ -172,11 +172,11 @@ func TestEventFactory(t *testing.T) {
 		expected := IdentifyEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 		}
 
-		event := withoutReasons.NewIdentifyEvent(user)
+		event := withoutReasons.NewIdentifyEvent(context)
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})
@@ -184,13 +184,13 @@ func TestEventFactory(t *testing.T) {
 
 func TestPropertiesOfEventTypesNotFromFactory(t *testing.T) {
 	fakeTime := ldtime.UnixMillisecondTime(100000)
-	user := User(lduser.NewUser("key"))
+	context := Context(ldcontext.New("key"))
 
 	t.Run("indexEvent", func(t *testing.T) {
 		ie := indexEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
-				User:         user,
+				Context:      context,
 			},
 		}
 		assert.Equal(t, ie.BaseEvent, ie.GetBase())

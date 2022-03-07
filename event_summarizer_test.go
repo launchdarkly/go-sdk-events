@@ -3,9 +3,9 @@ package ldevents
 import (
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -13,7 +13,7 @@ import (
 func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string,
 	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) FeatureRequestEvent {
 	return FeatureRequestEvent{
-		BaseEvent: BaseEvent{CreationDate: creationDate, User: User(lduser.NewUser("key"))},
+		BaseEvent: BaseEvent{CreationDate: creationDate, Context: Context(ldcontext.New("key"))},
 		Key:       flagKey,
 		Version:   flagVersion,
 		Variation: variation,

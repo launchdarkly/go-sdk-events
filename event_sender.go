@@ -10,15 +10,15 @@ import (
 
 	"github.com/google/uuid"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldlog"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
 )
 
 const (
 	defaultEventsURI   = "https://events.launchdarkly.com"
 	eventSchemaHeader  = "X-LaunchDarkly-Event-Schema"
 	payloadIDHeader    = "X-LaunchDarkly-Payload-ID"
-	currentEventSchema = "3"
+	currentEventSchema = "4"
 )
 
 type defaultEventSender struct {

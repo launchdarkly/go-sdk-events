@@ -35,6 +35,7 @@ jobs:
         environment:
           CIRCLE_TEST_REPORTS: /tmp/circle-reports
           CIRCLE_ARTIFACTS: /tmp/circle-artifacts
+          GOPRIVATE: github.com/launchdarkly/*-private
 
     steps:
       - checkout

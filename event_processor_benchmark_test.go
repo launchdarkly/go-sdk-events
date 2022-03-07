@@ -5,9 +5,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/lduser"
+	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
 )
 
 const benchmarkEventCount = 100
@@ -48,9 +49,9 @@ func BenchmarkEventProcessor(b *testing.B) {
 	})
 }
 
-func makeBenchmarkUsers() []lduser.User {
+func makeBenchmarkUsers() []ldcontext.Context {
 	numUsers := 10
-	ret := make([]lduser.User, 0, numUsers)
+	ret := make([]ldcontext.Context, 0, numUsers)
 	for i := 0; i < numUsers; i++ {
 		user := lduser.NewUserBuilder(fmt.Sprintf("user%d", i)).
 			Name(fmt.Sprintf("name%d", i)).
@@ -72,7 +73,7 @@ func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
 		variation := rnd.Intn(flagVariations)
 		event := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
-				User:         EventUser{User: users[rnd.Intn(len(users))]},
+				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),
 			},
 			Key:         fmt.Sprintf("flag%d", rnd.Intn(flagCount)),
@@ -100,7 +101,7 @@ func sendBenchmarkCustomEvents() func(EventProcessor) {
 	for i := 0; i < benchmarkEventCount; i++ {
 		event := CustomEvent{
 			BaseEvent: BaseEvent{
-				User:         EventUser{User: users[rnd.Intn(len(users))]},
+				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),
 			},
 			Key:  fmt.Sprintf("event%d", rnd.Intn(keyCount)),
