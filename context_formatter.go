@@ -81,19 +81,22 @@ func makePrivateAttrLookupData(attrRefList []ldattr.Ref) map[string]*privateAttr
 // WriteContext serializes a Context in the format appropriate for an analytics event, redacting
 // private attributes if necessary.
 func (f *eventContextFormatter) WriteContext(w *jwriter.Writer, ec *EventContext) {
-	if ec.Context.Err() != nil {
-		w.AddError(ec.Context.Err())
+	if ec.context.Err() != nil {
+		w.AddError(ec.context.Err())
 		return
 	}
-	c := &ec.Context
-	if c.Multiple() {
-		f.writeContextInternalMulti(w, c)
+	if ec.context.Multiple() {
+		f.writeContextInternalMulti(w, ec)
 	} else {
-		f.writeContextInternalSingle(w, c, true)
+		f.writeContextInternalSingle(w, &ec.context, true, ec.preRedacted)
 	}
 }
 
-func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c *ldcontext.Context, includeKind bool) {
+func (f *eventContextFormatter) writeContextInternalSingle(
+	w *jwriter.Writer,
+	c *ldcontext.Context,
+	includeKind, preRedacted bool,
+) {
 	obj := w.Object()
 	if includeKind {
 		obj.Name(ldattr.KindAttr).String(string(c.Kind()))
@@ -103,11 +106,22 @@ func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c 
 
 	optionalAttrNames := make([]string, 0, 20) // arbitrary capacity, expanded if necessary by GetOptionalAttributeNames
 	redactedAttrs := make([]string, 0, 20)
+	if preRedacted {
+		for i := 0; i < c.PrivateAttributeCount(); i++ {
+			if a, ok := c.PrivateAttributeByIndex(i); ok {
+				redactedAttrs = append(redactedAttrs, a.String())
+			}
+		}
+	}
 
 	optionalAttrNames = c.GetOptionalAttributeNames(optionalAttrNames)
 
 	for _, key := range optionalAttrNames {
 		if value, ok := c.GetValue(key); ok {
+			if preRedacted {
+				value.WriteToJSONWriter(obj.Name(key))
+				continue
+			}
 			if f.allAttributesPrivate {
 				// If allAttributesPrivate is true, then there's no complex filtering or recursing to be done: all of
 				// these values are by definition private, so just add their names to the redacted list.
@@ -142,14 +156,14 @@ func (f *eventContextFormatter) writeContextInternalSingle(w *jwriter.Writer, c 
 	obj.End()
 }
 
-func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, c *ldcontext.Context) {
+func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, ec *EventContext) {
 	obj := w.Object()
 	obj.Name(ldattr.KindAttr).String(string(ldcontext.MultiKind))
 
-	for i := 0; i < c.MultiKindCount(); i++ {
-		mc, _ := c.MultiKindByIndex(i)
+	for i := 0; i < ec.context.MultiKindCount(); i++ {
+		mc, _ := ec.context.MultiKindByIndex(i)
 		obj.Name(string(mc.Kind()))
-		f.writeContextInternalSingle(w, &mc, false)
+		f.writeContextInternalSingle(w, &mc, false, ec.preRedacted)
 	}
 
 	obj.End()

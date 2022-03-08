@@ -89,7 +89,7 @@ func matchFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventPro
 		props["reason"] = json.RawMessage(jsonhelpers.ToJSON(sourceEvent.Reason))
 	}
 	if inlineContext == nil {
-		props["contextKeys"] = expectedContextKeys(sourceEvent.Context.Context)
+		props["contextKeys"] = expectedContextKeys(sourceEvent.Context.context)
 	} else {
 		props["context"] = inlineContext
 	}

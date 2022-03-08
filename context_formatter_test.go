@@ -319,9 +319,64 @@ func TestEventContextFormatterOutput(t *testing.T) {
 		t.Run(p.desc, func(t *testing.T) {
 			f := newEventContextFormatter(p.options)
 			w := jwriter.NewWriter()
-			f.WriteContext(&w, &EventContext{Context: p.context})
+			ec := Context(p.context)
+			f.WriteContext(&w, &ec)
 			require.NoError(t, w.Error())
 			actualJSON := sortPrivateAttributesInOutputJSON(w.Bytes())
+			m.In(t).Assert(actualJSON, m.JSONStrEqual(p.expectedJSON))
+		})
+	}
+}
+
+func TestEventContextFormatterOutputWithPreRedactedAttributes(t *testing.T) {
+	userContext := ldcontext.NewBuilder("user-key").Name("my-name").
+		PrivateRef(ldattr.NewRef("/address/city"), ldattr.NewRef("name")).
+		Build()
+	orgContext := ldcontext.NewBuilder("org-key").Kind("org").Name("org-name").
+		PrivateRef(ldattr.NewRef("email")).
+		Build()
+
+	type params struct {
+		desc         string
+		eventContext EventContext
+		options      EventsConfiguration
+		expectedJSON string
+	}
+	for _, p := range []params{
+		{
+			"single kind",
+			ContextPreRedacted(userContext),
+			EventsConfiguration{},
+			`{"kind": "user", "key": "user-key", "name": "my-name",
+				"_meta": {"redactedAttributes": ["/address/city", "name"]}}`,
+			// It's deliberate that there is an unredacted "name" property here even though we also put
+			// "name" in the pre-redacted list; that's to prove that we are *not* applying any redaction
+			// logic at all when there is a pre-redacted list.
+		},
+		{
+			"multi-kind",
+			ContextPreRedacted(ldcontext.NewMulti(userContext, orgContext)),
+			EventsConfiguration{},
+			`{"kind": "multi",
+			    "org": {"key": "org-key", "name": "org-name",
+					"_meta": {"redactedAttributes": ["email"]}},
+				"user": {"key": "user-key", "name": "my-name",
+					"_meta": {"redactedAttributes": ["/address/city", "name"]}}}`,
+		},
+		{
+			"config options for private attributes are ignored",
+			ContextPreRedacted(userContext),
+			EventsConfiguration{AllAttributesPrivate: true},
+			`{"kind": "user", "key": "user-key", "name": "my-name",
+				"_meta": {"redactedAttributes": ["/address/city", "name"]}}`,
+		},
+	} {
+		t.Run(p.desc, func(t *testing.T) {
+			f := newEventContextFormatter(p.options)
+			w := jwriter.NewWriter()
+			f.WriteContext(&w, &p.eventContext)
+			require.NoError(t, w.Error())
+			actualJSON := w.Bytes() // don't need to sort the private attrs here because they are copied straight from the input
 			m.In(t).Assert(actualJSON, m.JSONStrEqual(p.expectedJSON))
 		})
 	}
@@ -331,7 +386,8 @@ func TestWriteInvalidContext(t *testing.T) {
 	badContext := ldcontext.New("")
 	f := newEventContextFormatter(EventsConfiguration{})
 	w := jwriter.NewWriter()
-	f.WriteContext(&w, &EventContext{Context: badContext})
+	ec := Context(badContext)
+	f.WriteContext(&w, &ec)
 	assert.Equal(t, badContext.Err(), w.Error())
 }
 

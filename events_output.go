@@ -65,7 +65,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		if evt.Debug {
 			ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 		} else {
-			writeContextKeys(&obj, &evt.Context.Context)
+			writeContextKeys(&obj, &evt.Context.context)
 		}
 		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
 		evt.Value.WriteToJSONWriter(obj.Name("value"))
@@ -81,7 +81,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		if !evt.Data.IsNull() {
 			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
-		writeContextKeys(&obj, &evt.Context.Context)
+		writeContextKeys(&obj, &evt.Context.context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
 	case IdentifyEvent:

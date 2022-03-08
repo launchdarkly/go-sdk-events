@@ -383,30 +383,6 @@ func TestDebugModeExpiresBasedOnServerTimeIfServerTimeIsLater(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
-func TestTwoFeatureEventsForSameUserGenerateOnlyOneIndexEvent(t *testing.T) {
-	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
-		ep, es := createEventProcessorAndSender(config)
-		defer ep.Close()
-
-		context := basicContext()
-		flag1 := flagEventPropertiesImpl{Key: "flagkey1", Version: 11, TrackEvents: true}
-		flag2 := flagEventPropertiesImpl{Key: "flagkey2", Version: 22, TrackEvents: true}
-		fe1 := defaultEventFactory.NewEvalEvent(flag1, context, testEvalDetailWithoutReason, ldvalue.Null(), "")
-		fe2 := defaultEventFactory.NewEvalEvent(flag2, context, testEvalDetailWithoutReason, ldvalue.Null(), "")
-		ep.RecordFeatureRequestEvent(fe1)
-		ep.RecordFeatureRequestEvent(fe2)
-		ep.Flush()
-
-		assertEventsReceived(t, es,
-			indexEventForContextKey(context.GetKey()),
-			featureEventWithAllProperties(fe1, flag1),
-			featureEventWithAllProperties(fe2, flag2),
-			anySummaryEvent(),
-		)
-		es.assertNoMoreEvents(t)
-	})
-}
-
 func TestNonTrackedEventsAreSummarized(t *testing.T) {
 	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
 	defer ep.Close()
@@ -451,7 +427,7 @@ func TestCustomEventProperties(t *testing.T) {
 		"creationDate": ce.CreationDate,
 		"key":          ce.Key,
 		"data":         data,
-		"contextKeys":  expectedContextKeys(context.Context),
+		"contextKeys":  expectedContextKeys(context.context),
 	})
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
@@ -478,7 +454,7 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 		"key":          ce.Key,
 		"data":         data,
 		"metricValue":  metric,
-		"contextKeys":  expectedContextKeys(context.Context),
+		"contextKeys":  expectedContextKeys(context.context),
 	})
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
@@ -510,7 +486,7 @@ func TestPeriodicFlush(t *testing.T) {
 	ie := defaultEventFactory.NewIdentifyEvent(context)
 	ep.RecordIdentifyEvent(ie)
 
-	assertEventsReceived(t, es, identifyEventForContextKey(context.GetKey()))
+	assertEventsReceived(t, es, identifyEventForContextKey(context.context.Key()))
 	es.assertNoMoreEvents(t)
 }
 
@@ -523,7 +499,7 @@ func TestClosingEventProcessorForcesSynchronousFlush(t *testing.T) {
 	ep.RecordIdentifyEvent(ie)
 	ep.Close()
 
-	assertEventsReceived(t, es, identifyEventForContextKey(context.GetKey()))
+	assertEventsReceived(t, es, identifyEventForContextKey(context.context.Key()))
 	es.assertNoMoreEvents(t)
 }
 
@@ -545,7 +521,7 @@ func TestPeriodicUserKeysFlush(t *testing.T) {
 	// We're relying on the context key flush not happening in between event1 and event2, so we should get
 	// a single index event for the context.
 	assertEventsReceived(t, es,
-		indexEventForContextKey(context.GetKey()),
+		indexEventForContextKey(context.context.Key()),
 		customEventWithEventKey("event1"),
 		customEventWithEventKey("event2"),
 	)
@@ -558,7 +534,7 @@ func TestPeriodicUserKeysFlush(t *testing.T) {
 	ep.RecordCustomEvent(event3)
 	ep.Flush()
 	assertEventsReceived(t, es,
-		indexEventForContextKey(context.GetKey()),
+		indexEventForContextKey(context.context.Key()),
 		customEventWithEventKey("event3"),
 	)
 	es.assertNoMoreEvents(t)
@@ -740,14 +716,14 @@ func TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy(t *testing.T) {
 
 	// The first unblocked worker should pick up the queued payload with event1.
 	senderGateCh <- struct{}{}
-	assertEventsReceived(t, es, identifyEventForContextKey(user1.GetKey()))
+	assertEventsReceived(t, es, identifyEventForContextKey(user1.context.Key()))
 
 	// Now a flush should succeed and send the current payload.
 	senderGateCh <- struct{}{}
 	ep.Flush()
 	assertEventsReceived(t, es,
-		identifyEventForContextKey(user2.GetKey()),
-		identifyEventForContextKey(user3.GetKey()),
+		identifyEventForContextKey(user2.context.Key()),
+		identifyEventForContextKey(user3.context.Key()),
 	)
 	assert.Equal(t, maxFlushWorkers+2, es.getPayloadCount())
 }

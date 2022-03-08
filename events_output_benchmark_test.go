@@ -40,13 +40,11 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 func makeBasicEvents() []commonEvent {
 	baseEvent := BaseEvent{
 		CreationDate: ldtime.UnixMillisNow(),
-		Context: EventContext{
-			Context: lduser.NewUserBuilder("user-key").
-				Email("test@example.com").
-				Name("user-name").
-				Custom("custom-attr", ldvalue.Bool(true)).
-				Build(),
-		},
+		Context: Context(lduser.NewUserBuilder("user-key").
+			Email("test@example.com").
+			Name("user-name").
+			Custom("custom-attr", ldvalue.Bool(true)).
+			Build()),
 	}
 	return []commonEvent{
 		FeatureRequestEvent{

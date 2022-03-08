@@ -263,7 +263,7 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	}
 	// For each context we haven't seen before, we add an index event before the event that referenced
 	// the context - unless the original event will contain an inline context (e.g. an identify event).
-	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().Context.Context.FullyQualifiedKey())
+	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().Context.context.FullyQualifiedKey())
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
 			ed.deduplicatedContexts++

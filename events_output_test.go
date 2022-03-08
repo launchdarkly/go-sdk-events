@@ -58,7 +58,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 		// just want to verify here that eventOutputFormatter is actually *using* eventContextFormatter with
 		// the specified configuration.
 		contextJSON := contextJSON(context, config)
-		contextKeys := expectedContextKeys(context.Context)
+		contextKeys := expectedContextKeys(context.context)
 
 		t.Run("feature", func(t *testing.T) {
 			event1 := withoutReasons.NewEvalEvent(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
