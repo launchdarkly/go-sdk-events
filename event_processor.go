@@ -245,10 +245,10 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	switch evt := evt.(type) {
 	case FeatureRequestEvent:
 		ed.outbox.addToSummary(evt) // add all feature events to summaries
-		willAddFullEvent = evt.TrackEvents
+		willAddFullEvent = evt.RequireFullEvent
 		if ed.shouldDebugEvent(&evt) {
 			de := evt
-			de.Debug = true
+			de.debug = true
 			debugEvent = de
 		}
 		baseEvent = evt

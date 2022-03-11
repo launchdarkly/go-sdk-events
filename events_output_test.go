@@ -46,7 +46,7 @@ func withTestContextsAndConfigs(t *testing.T, action func(*testing.T, EventConte
 
 func TestEventOutputFullEvents(t *testing.T) {
 	withTestContextsAndConfigs(t, func(t *testing.T, context EventContext, config EventsConfiguration) {
-		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
 		formatter := eventOutputFormatter{
 			contextFormatter: newEventContextFormatter(config),
@@ -62,7 +62,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 		t.Run("feature", func(t *testing.T) {
 			event1 := withoutReasons.NewEvalEvent(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-				ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "")
 			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "feature",
@@ -77,7 +77,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 			event1r := withReasons.NewEvalEvent(flag, context,
 				ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, ldreason.NewEvalReasonFallthrough()),
-				ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "")
 			verifyEventOutput(t, formatter, event1r,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "feature",
@@ -92,7 +92,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 				}))
 
 			event2 := withoutReasons.NewEvalEvent(flag, context, ldreason.EvaluationDetail{Value: ldvalue.String("v")},
-				ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "")
 			event2.Variation = ldvalue.OptionalInt{}
 			verifyEventOutput(t, formatter, event2,
 				m.JSONEqual(map[string]interface{}{
@@ -106,7 +106,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 				}))
 
 			event3 := withoutReasons.NewEvalEvent(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-				ldvalue.String("dv"), "pre")
+				false, ldvalue.String("dv"), "pre")
 			verifyEventOutput(t, formatter, event3,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "feature",
@@ -135,8 +135,8 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 		t.Run("debug", func(t *testing.T) {
 			event1 := withoutReasons.NewEvalEvent(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-				ldvalue.String("dv"), "")
-			event1.Debug = true
+				false, ldvalue.String("dv"), "")
+			event1.debug = true
 			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "debug",
@@ -211,10 +211,10 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 func TestEventOutputSummaryEvents(t *testing.T) {
 	user := Context(lduser.NewUser("u"))
-	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
-	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
+	flag1v1 := FlagEventProperties{Key: "flag1", Version: 100}
+	flag1v2 := FlagEventProperties{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")
-	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
+	flag2 := FlagEventProperties{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 
 	formatter := eventOutputFormatter{
@@ -225,7 +225,7 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	t.Run("summary - single flag, single counter", func(t *testing.T) {
 		es1 := newEventSummarizer()
 		event1 := withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-			ldvalue.String("dv"), "")
+			false, ldvalue.String("dv"), "")
 		es1.summarizeEvent(event1)
 		verifySummaryEventOutput(t, formatter, es1.snapshot(),
 			m.JSONEqual(map[string]interface{}{
@@ -242,7 +242,7 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 
 		es2 := newEventSummarizer()
 		event2 := withoutReasons.NewEvalEvent(flag1v1, user, ldreason.EvaluationDetail{Value: ldvalue.String("dv")},
-			ldvalue.String("dv"), "")
+			false, ldvalue.String("dv"), "")
 		event2.Variation = ldvalue.OptionalInt{}
 		es2.summarizeEvent(event2)
 		verifySummaryEventOutput(t, formatter, es2.snapshot(),
@@ -279,15 +279,15 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	t.Run("summary - multiple counters", func(t *testing.T) {
 		es := newEventSummarizer()
 		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			flag1Default, ""))
+			false, flag1Default, ""))
 		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-			flag1Default, ""))
+			false, flag1Default, ""))
 		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			flag1Default, ""))
+			false, flag1Default, ""))
 		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			flag1Default, ""))
+			false, flag1Default, ""))
 		es.summarizeEvent(withoutReasons.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-			flag2Default, ""))
+			false, flag2Default, ""))
 
 		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
 		require.Equal(t, 1, count)

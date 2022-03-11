@@ -56,13 +56,13 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 	switch evt := evt.(type) {
 	case FeatureRequestEvent:
 		kind := FeatureRequestEventKind
-		if evt.Debug {
+		if evt.debug {
 			kind = FeatureDebugEventKind
 		}
 		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
-		if evt.Debug {
+		if evt.debug {
 			ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 		} else {
 			writeContextKeys(&obj, &evt.Context.context)

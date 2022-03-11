@@ -70,10 +70,10 @@ func makeBasicEvents() []commonEvent {
 
 func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 	user := Context(lduser.NewUser("u"))
-	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
-	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
+	flag1v1 := FlagEventProperties{Key: "flag1", Version: 100}
+	flag1v2 := FlagEventProperties{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")
-	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
+	flag2 := FlagEventProperties{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 	factory := NewEventFactory(false, fakeTimeFn)
 
@@ -81,15 +81,15 @@ func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 
 	es := newEventSummarizer()
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-		flag2Default, ""))
+		false, flag2Default, ""))
 	summary := es.snapshot()
 
 	b.ResetTimer()
