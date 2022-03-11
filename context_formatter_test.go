@@ -1,6 +1,7 @@
 package ldevents
 
 import (
+	"encoding/json"
 	"sort"
 	"testing"
 
@@ -328,13 +329,17 @@ func TestEventContextFormatterOutput(t *testing.T) {
 	}
 }
 
-func TestEventContextFormatterOutputWithPreRedactedAttributes(t *testing.T) {
-	userContext := ldcontext.NewBuilder("user-key").Name("my-name").
-		PrivateRef(ldattr.NewRef("/address/city"), ldattr.NewRef("name")).
-		Build()
-	orgContext := ldcontext.NewBuilder("org-key").Kind("org").Name("org-name").
-		PrivateRef(ldattr.NewRef("email")).
-		Build()
+func TestPreserializedEventContextFormatterOutput(t *testing.T) {
+	userContextPlaceholder := ldcontext.New("user-key")
+	userContextJSON := `{"kind": "user", "key": "user-key", "name": "my-name",
+		"_meta": {"redactedAttributes": ["/address/city", "name"]}}`
+	orgContextPlaceholder := ldcontext.NewWithKind("org", "org-key")
+	multiContext := ldcontext.NewMulti(userContextPlaceholder, orgContextPlaceholder)
+	multiContextJSON := `{"kind": "multi",
+	"org": {"key": "org-key", "name": "org-name",
+		"_meta": {"redactedAttributes": ["email"]}},
+	"user": {"key": "user-key", "name": "my-name",
+		"_meta": {"redactedAttributes": ["/address/city", "name"]}}}`
 
 	type params struct {
 		desc         string
@@ -345,30 +350,24 @@ func TestEventContextFormatterOutputWithPreRedactedAttributes(t *testing.T) {
 	for _, p := range []params{
 		{
 			"single kind",
-			ContextPreRedacted(userContext),
+			PreserializedContext(userContextPlaceholder, json.RawMessage(userContextJSON)),
 			EventsConfiguration{},
-			`{"kind": "user", "key": "user-key", "name": "my-name",
-				"_meta": {"redactedAttributes": ["/address/city", "name"]}}`,
+			userContextJSON,
 			// It's deliberate that there is an unredacted "name" property here even though we also put
 			// "name" in the pre-redacted list; that's to prove that we are *not* applying any redaction
 			// logic at all when there is a pre-redacted list.
 		},
 		{
 			"multi-kind",
-			ContextPreRedacted(ldcontext.NewMulti(userContext, orgContext)),
+			PreserializedContext(multiContext, json.RawMessage(multiContextJSON)),
 			EventsConfiguration{},
-			`{"kind": "multi",
-			    "org": {"key": "org-key", "name": "org-name",
-					"_meta": {"redactedAttributes": ["email"]}},
-				"user": {"key": "user-key", "name": "my-name",
-					"_meta": {"redactedAttributes": ["/address/city", "name"]}}}`,
+			multiContextJSON,
 		},
 		{
 			"config options for private attributes are ignored",
-			ContextPreRedacted(userContext),
+			PreserializedContext(userContextPlaceholder, json.RawMessage(userContextJSON)),
 			EventsConfiguration{AllAttributesPrivate: true},
-			`{"kind": "user", "key": "user-key", "name": "my-name",
-				"_meta": {"redactedAttributes": ["/address/city", "name"]}}`,
+			userContextJSON,
 		},
 	} {
 		t.Run(p.desc, func(t *testing.T) {
