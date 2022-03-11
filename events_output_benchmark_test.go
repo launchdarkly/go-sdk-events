@@ -81,15 +81,15 @@ func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 
 	es := newEventSummarizer()
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
+		false, flag1Default, ""))
 	es.summarizeEvent(factory.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-		flag2Default, ""))
+		false, flag2Default, ""))
 	summary := es.snapshot()
 
 	b.ResetTimer()

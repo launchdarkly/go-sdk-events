@@ -61,7 +61,7 @@ func withFeatureEventOrCustomEvent(
 		flag := FlagEventProperties{Key: "flagkey", Version: 11}
 		action(t,
 			func(ep EventProcessor, context EventContext) (Event, []m.Matcher) {
-				fe := defaultEventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, ldvalue.Null(), "")
+				fe := defaultEventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 				ep.RecordFeatureRequestEvent(fe)
 				return fe, nil
 			},
@@ -105,7 +105,7 @@ func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {
 		defer ep.Close()
 
 		flag := FlagEventProperties{Key: "flagkey", Version: 11}
-		fe := defaultEventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, ldvalue.Null(), "")
+		fe := defaultEventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 		ep.RecordFeatureRequestEvent(fe)
 		ep.Flush()
 
@@ -123,7 +123,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 		defer ep.Close()
 
 		flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
-		fe := defaultEventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, ldvalue.Null(), "")
+		fe := defaultEventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 		ep.RecordFeatureRequestEvent(fe)
 		ep.Flush()
 
@@ -239,7 +239,7 @@ func TestDebugEventProperties(t *testing.T) {
 
 		context := basicContext()
 		flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: ldtime.UnixMillisNow() + 1000000}
-		fe := defaultEventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, ldvalue.Null(), "")
+		fe := defaultEventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 		ep.RecordFeatureRequestEvent(fe)
 		ep.Flush()
 
@@ -257,7 +257,7 @@ func TestFeatureEventCanContainReason(t *testing.T) {
 	defer ep.Close()
 
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
-	fe := defaultEventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, ldvalue.Null(), "")
+	fe := defaultEventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 	fe.Reason = ldreason.NewEvalReasonFallthrough()
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
@@ -282,7 +282,7 @@ func TestDebugEventIsAddedIfFlagIsTemporarilyInDebugMode(t *testing.T) {
 	context := basicContext()
 	futureTime := fakeTimeNow + 100
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: futureTime}
-	fe := eventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, ldvalue.Null(), "")
+	fe := eventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -306,7 +306,7 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 	context := basicContext()
 	futureTime := fakeTimeNow + 100
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true, DebugEventsUntilDate: futureTime}
-	fe := eventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, ldvalue.Null(), "")
+	fe := eventFactory.NewEvalEvent(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -342,7 +342,7 @@ func TestDebugModeExpiresBasedOnClientTimeIfClientTimeIsLater(t *testing.T) {
 	// the future than the server time, but in the past compared to the client.
 	debugUntil := serverTime + 1000
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: debugUntil}
-	fe := eventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, ldvalue.Null(), "")
+	fe := eventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -374,7 +374,7 @@ func TestDebugModeExpiresBasedOnServerTimeIfServerTimeIsLater(t *testing.T) {
 	// the future than the client time, but in the past compared to the server.
 	debugUntil := serverTime - 1000
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: debugUntil}
-	fe := eventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, ldvalue.Null(), "")
+	fe := eventFactory.NewEvalEvent(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe)
 	ep.Flush()
 
@@ -392,9 +392,9 @@ func TestNonTrackedEventsAreSummarized(t *testing.T) {
 	flag2 := FlagEventProperties{Key: "flagkey2", Version: 22}
 	flag1Eval := ldreason.NewEvaluationDetail(ldvalue.String("value1"), 2, noReason)
 	flag2Eval := ldreason.NewEvaluationDetail(ldvalue.String("value2"), 3, noReason)
-	fe1 := defaultEventFactory.NewEvalEvent(flag1, context, flag1Eval, ldvalue.Null(), "")
-	fe2 := defaultEventFactory.NewEvalEvent(flag2, context, flag2Eval, ldvalue.Null(), "")
-	fe3 := defaultEventFactory.NewEvalEvent(flag2, context, flag2Eval, ldvalue.Null(), "")
+	fe1 := defaultEventFactory.NewEvalEvent(flag1, context, flag1Eval, false, ldvalue.Null(), "")
+	fe2 := defaultEventFactory.NewEvalEvent(flag2, context, flag2Eval, false, ldvalue.Null(), "")
+	fe3 := defaultEventFactory.NewEvalEvent(flag2, context, flag2Eval, false, ldvalue.Null(), "")
 	ep.RecordFeatureRequestEvent(fe1)
 	ep.RecordFeatureRequestEvent(fe2)
 	ep.RecordFeatureRequestEvent(fe3)

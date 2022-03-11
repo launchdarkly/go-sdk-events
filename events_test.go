@@ -42,14 +42,14 @@ func TestEventFactory(t *testing.T) {
 
 		event1 := withoutReasons.NewEvalEvent(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
-			expected.Default, "pre")
+			false, expected.Default, "pre")
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 
 		event2 := withReasons.NewEvalEvent(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
-			expected.Default, "pre")
+			false, expected.Default, "pre")
 		assert.Equal(t, expected, event2)
 	})
 
@@ -74,7 +74,7 @@ func TestEventFactory(t *testing.T) {
 		expected1.RequireFullEvent = true
 		event1 := withoutReasons.NewEvalEvent(flag1, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
-			expected.Default, "")
+			false, expected.Default, "")
 		assert.Equal(t, expected1, event1)
 
 		flag2 := flag
@@ -83,12 +83,12 @@ func TestEventFactory(t *testing.T) {
 		expected2.DebugEventsUntilDate = flag2.DebugEventsUntilDate
 		event2 := withoutReasons.NewEvalEvent(flag2, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
-			expected.Default, "")
+			false, expected.Default, "")
 		assert.Equal(t, expected2, event2)
 	})
 
 	t.Run("NewSuccessfulEvalEvent with experimentation", func(t *testing.T) {
-		flag := FlagEventProperties{Key: "flagkey", Version: 100, RequireReason: true}
+		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
@@ -106,7 +106,7 @@ func TestEventFactory(t *testing.T) {
 
 		event := withoutReasons.NewEvalEvent(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
-			expected.Default, "")
+			true, expected.Default, "")
 		assert.Equal(t, expected, event)
 	})
 

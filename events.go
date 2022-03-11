@@ -122,11 +122,6 @@ type FlagEventProperties struct {
 	Version int
 	// RequireFullEvent is true if the flag has been configured to always generate detailed event data.
 	RequireFullEvent bool
-	// RequireReason is true if LaunchDarkly needs to see the full evaluation details for this evaluation,
-	// including the evaluation reason, regardless of whether we would normally send them. The SDK will set
-	// this depending on whether the evaluation involved an experiment. If RequireReason is true, then
-	// RequireFullEvent is also treated as true regardless of its value.
-	RequireReason bool
 	// DebugEventsUntilDate is non-zero if event debugging has been temporarily enabled for the flag. It is the
 	// time at which debugging mode should expire.
 	DebugEventsUntilDate ldtime.UnixMillisecondTime
@@ -175,10 +170,16 @@ func (f EventFactory) NewUnknownFlagEvent(
 }
 
 // NewEvalEvent creates an evaluation event for an existing flag.
+//
+// The isExperiment parameter, if true, means that a full evaluation event should be generated (regardless
+// of whether flagProps.RequireFullEvent is true) and the evaluation reason should be included in the event
+// (even if it normally would not have been). In the server-side SDK, that is determined by the IsExperiment
+// field returned by the evaluator.
 func (f EventFactory) NewEvalEvent(
 	flagProps FlagEventProperties,
 	context EventContext,
 	detail ldreason.EvaluationDetail,
+	isExperiment bool,
 	defaultVal ldvalue.Value,
 	prereqOf string,
 ) FeatureRequestEvent {
@@ -192,10 +193,10 @@ func (f EventFactory) NewEvalEvent(
 		Variation:            detail.VariationIndex,
 		Value:                detail.Value,
 		Default:              defaultVal,
-		RequireFullEvent:     flagProps.RequireReason || flagProps.RequireFullEvent,
+		RequireFullEvent:     isExperiment || flagProps.RequireFullEvent,
 		DebugEventsUntilDate: flagProps.DebugEventsUntilDate,
 	}
-	if f.includeReasons || flagProps.RequireReason {
+	if f.includeReasons || isExperiment {
 		fre.Reason = detail.Reason
 	}
 	if prereqOf != "" {
