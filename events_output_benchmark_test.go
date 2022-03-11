@@ -70,10 +70,10 @@ func makeBasicEvents() []commonEvent {
 
 func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 	user := Context(lduser.NewUser("u"))
-	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
-	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
+	flag1v1 := FlagEventProperties{Key: "flag1", Version: 100}
+	flag1v2 := FlagEventProperties{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")
-	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
+	flag2 := FlagEventProperties{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 	factory := NewEventFactory(false, fakeTimeFn)
 

@@ -76,11 +76,11 @@ func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
 				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),
 			},
-			Key:         fmt.Sprintf("flag%d", rnd.Intn(flagCount)),
-			Version:     ldvalue.NewOptionalInt(rnd.Intn(flagVersions) + 1),
-			Variation:   ldvalue.NewOptionalInt(variation),
-			Value:       ldvalue.Int(variation),
-			TrackEvents: tracking,
+			Key:              fmt.Sprintf("flag%d", rnd.Intn(flagCount)),
+			Version:          ldvalue.NewOptionalInt(rnd.Intn(flagVersions) + 1),
+			Variation:        ldvalue.NewOptionalInt(variation),
+			Value:            ldvalue.Int(variation),
+			RequireFullEvent: tracking,
 		}
 		events = append(events, event)
 	}

@@ -16,25 +16,6 @@ var defaultEventFactory = NewEventFactory(false, nil)
 
 var noReason = ldreason.EvaluationReason{}
 
-// Stub implementation of FlagEventProperties
-type flagEventPropertiesImpl struct {
-	Key                  string
-	Version              int
-	TrackEvents          bool
-	DebugEventsUntilDate ldtime.UnixMillisecondTime
-	IsExperiment         bool
-}
-
-func (f flagEventPropertiesImpl) GetKey() string                   { return f.Key }
-func (f flagEventPropertiesImpl) GetVersion() int                  { return f.Version }
-func (f flagEventPropertiesImpl) IsFullEventTrackingEnabled() bool { return f.TrackEvents }
-func (f flagEventPropertiesImpl) GetDebugEventsUntilDate() ldtime.UnixMillisecondTime {
-	return f.DebugEventsUntilDate
-}
-func (f flagEventPropertiesImpl) IsExperimentationEnabled(reason ldreason.EvaluationReason) bool {
-	return f.IsExperiment
-}
-
 func TestEventFactory(t *testing.T) {
 	fakeTime := ldtime.UnixMillisecondTime(100000)
 	timeFn := func() ldtime.UnixMillisecondTime { return fakeTime }
@@ -43,7 +24,7 @@ func TestEventFactory(t *testing.T) {
 	context := Context(ldcontext.New("key"))
 
 	t.Run("NewSuccessfulEvalEvent", func(t *testing.T) {
-		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
@@ -73,7 +54,7 @@ func TestEventFactory(t *testing.T) {
 	})
 
 	t.Run("NewSuccessfulEvalEvent with tracking/debugging", func(t *testing.T) {
-		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
@@ -88,9 +69,9 @@ func TestEventFactory(t *testing.T) {
 		}
 
 		flag1 := flag
-		flag1.TrackEvents = true
+		flag1.RequireFullEvent = true
 		expected1 := expected
-		expected1.TrackEvents = true
+		expected1.RequireFullEvent = true
 		event1 := withoutReasons.NewEvalEvent(flag1, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			expected.Default, "")
@@ -107,20 +88,20 @@ func TestEventFactory(t *testing.T) {
 	})
 
 	t.Run("NewSuccessfulEvalEvent with experimentation", func(t *testing.T) {
-		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100, IsExperiment: true}
+		flag := FlagEventProperties{Key: "flagkey", Version: 100, RequireReason: true}
 
 		expected := FeatureRequestEvent{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
 			},
-			Key:         flag.Key,
-			Version:     ldvalue.NewOptionalInt(flag.Version),
-			Variation:   ldvalue.NewOptionalInt(1),
-			Value:       ldvalue.String("value"),
-			Default:     ldvalue.String("default"),
-			Reason:      ldreason.NewEvalReasonFallthrough(),
-			TrackEvents: true,
+			Key:              flag.Key,
+			Version:          ldvalue.NewOptionalInt(flag.Version),
+			Variation:        ldvalue.NewOptionalInt(1),
+			Value:            ldvalue.String("value"),
+			Default:          ldvalue.String("default"),
+			Reason:           ldreason.NewEvalReasonFallthrough(),
+			RequireFullEvent: true,
 		}
 
 		event := withoutReasons.NewEvalEvent(flag, context,

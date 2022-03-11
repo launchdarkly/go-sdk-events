@@ -58,7 +58,7 @@ func indexEventForContextKey(key string) m.Matcher {
 func featureEventForFlag(flag FlagEventProperties) m.Matcher {
 	return m.AllOf(
 		m.JSONProperty("kind").Should(m.Equal("feature")),
-		m.JSONProperty("key").Should(m.Equal(flag.GetKey())))
+		m.JSONProperty("key").Should(m.Equal(flag.Key)))
 }
 
 func featureEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties) m.Matcher {
@@ -73,9 +73,9 @@ func matchFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventPro
 	debug bool, inlineContext interface{}) m.Matcher {
 	props := map[string]interface{}{
 		"kind":         "feature",
-		"key":          flag.GetKey(),
+		"key":          flag.Key,
 		"creationDate": sourceEvent.GetBase().CreationDate,
-		"version":      flag.GetVersion(),
+		"version":      flag.Version,
 		"value":        sourceEvent.Value,
 		"default":      nil,
 	}
@@ -103,17 +103,17 @@ func customEventWithEventKey(eventKey string) m.Matcher {
 	)
 }
 
-func summaryEventWithFlag(flag flagEventPropertiesImpl, counterProps ...[]m.Matcher) m.Matcher {
+func summaryEventWithFlag(flag FlagEventProperties, counterProps ...[]m.Matcher) m.Matcher {
 	counters := make([]m.Matcher, 0, len(counterProps))
 	for _, cp := range counterProps {
 		counters = append(counters, m.AllOf(
-			append(cp, m.JSONProperty("version").Should(m.Equal(flag.GetVersion())))...,
+			append(cp, m.JSONProperty("version").Should(m.Equal(flag.Version)))...,
 		))
 	}
 	return m.AllOf(
 		m.JSONProperty("kind").Should(m.Equal("summary")),
 		m.JSONProperty("features").Should(
-			m.JSONProperty(flag.GetKey()).Should(
+			m.JSONProperty(flag.Key).Should(
 				m.JSONProperty("counters").Should(m.ItemsInAnyOrder(counters...)),
 			),
 		),

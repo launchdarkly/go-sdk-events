@@ -46,7 +46,7 @@ func withTestContextsAndConfigs(t *testing.T, action func(*testing.T, EventConte
 
 func TestEventOutputFullEvents(t *testing.T) {
 	withTestContextsAndConfigs(t, func(t *testing.T, context EventContext, config EventsConfiguration) {
-		flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
 		formatter := eventOutputFormatter{
 			contextFormatter: newEventContextFormatter(config),
@@ -136,7 +136,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 		t.Run("debug", func(t *testing.T) {
 			event1 := withoutReasons.NewEvalEvent(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
 				ldvalue.String("dv"), "")
-			event1.Debug = true
+			event1.debug = true
 			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "debug",
@@ -211,10 +211,10 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 func TestEventOutputSummaryEvents(t *testing.T) {
 	user := Context(lduser.NewUser("u"))
-	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
-	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
+	flag1v1 := FlagEventProperties{Key: "flag1", Version: 100}
+	flag1v2 := FlagEventProperties{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")
-	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
+	flag2 := FlagEventProperties{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 
 	formatter := eventOutputFormatter{
