@@ -234,8 +234,9 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 				"endDate":   fakeTime,
 				"features": map[string]interface{}{
 					"flag1": map[string]interface{}{
-						"counters": json.RawMessage(`[{"count":1,"value":"v","variation":1,"version":100}]`),
-						"default":  "dv",
+						"counters":     json.RawMessage(`[{"count":1,"value":"v","variation":1,"version":100}]`),
+						"contextKinds": []string{"user"},
+						"default":      "dv",
 					},
 				},
 			}))
@@ -252,8 +253,9 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 				"endDate":   fakeTime,
 				"features": map[string]interface{}{
 					"flag1": map[string]interface{}{
-						"counters": json.RawMessage(`[{"count":1,"value":"dv","version":100}]`),
-						"default":  "dv",
+						"counters":     json.RawMessage(`[{"count":1,"value":"dv","version":100}]`),
+						"contextKinds": []string{"user"},
+						"default":      "dv",
 					},
 				},
 			}))
@@ -269,8 +271,9 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 				"endDate":   fakeTime,
 				"features": map[string]interface{}{
 					"flagkey": map[string]interface{}{
-						"counters": json.RawMessage(`[{"count":1,"value":"dv","unknown":true}]`),
-						"default":  "dv",
+						"counters":     json.RawMessage(`[{"count":1,"value":"dv","unknown":true}]`),
+						"contextKinds": []string{"user"},
+						"default":      "dv",
 					},
 				},
 			}))
@@ -307,12 +310,53 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 							m.JSONStrEqual(`{"version":100,"variation":2,"value":"b","count":1}`),
 							m.JSONStrEqual(`{"version":200,"variation":1,"value":"a","count":1}`),
 						)),
+						m.KV("contextKinds", m.Items(m.Equal("user"))),
 					)),
 					m.KV("flag2", m.MapOf(
 						m.KV("default", m.JSONEqual(flag2Default)),
 						m.KV("counters", m.ItemsInAnyOrder(
 							m.JSONStrEqual(`{"version":1,"variation":3,"value":"c","count":1}`),
 						)),
+						m.KV("contextKinds", m.Items(m.Equal("user"))),
+					)),
+				)),
+			),
+		)))
+	})
+
+	t.Run("summary with multiple context kinds", func(t *testing.T) {
+		context1, context2, context3 := ldcontext.New("userkey1"), ldcontext.New("userkey2"), ldcontext.NewWithKind("org", "orgkey")
+
+		es := newEventSummarizer()
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, Context(context2), ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, Context(context3), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v2, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvalEvent(flag2, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
+			false, flag2Default, ""))
+
+		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
+		require.Equal(t, 1, count)
+
+		m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(
+			m.MapOf(
+				m.KV("kind", m.Equal("summary")),
+				m.KV("startDate", m.Not(m.BeNil())),
+				m.KV("endDate", m.Not(m.BeNil())),
+				m.KV("features", m.MapOf(
+					m.KV("flag1", m.MapOf(
+						m.KV("default", m.JSONEqual(flag1Default)),
+						m.KV("counters", m.Length().Should(m.Equal(3))),
+						m.KV("contextKinds", m.ItemsInAnyOrder(m.Equal("user"), m.Equal("org"))),
+					)),
+					m.KV("flag2", m.MapOf(
+						m.KV("default", m.JSONEqual(flag2Default)),
+						m.KV("counters", m.Length().Should(m.Equal(1))),
+						m.KV("contextKinds", m.Items(m.Equal("user"))),
 					)),
 				)),
 			),

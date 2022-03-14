@@ -33,7 +33,7 @@ func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary ev
 	for _, e := range events {
 		ef.writeOutputEvent(&w, e)
 	}
-	if len(summary.counters) > 0 {
+	if summary.hasCounters() {
 		ef.writeSummaryEvent(&w, summary)
 		n++
 	}
@@ -123,63 +123,36 @@ func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eve
 	obj.Name("startDate").Float64(float64(snapshot.startDate))
 	obj.Name("endDate").Float64(float64(snapshot.endDate))
 
-	flagsObj := obj.Name("features").Object()
+	allFlagsObj := obj.Name("features").Object()
+	for flagKey, flagSummary := range snapshot.flags {
+		flagObj := allFlagsObj.Name(flagKey).Object()
 
-	// snapshot.counters contains composite keys in any order, part of which is the flag key; we want to group
-	// them together by flag key. The following multi-pass logic allows us to do this without using maps. It is
-	// based on the corresponding Java SDK logic in EventOutputFormatter.java.
-
-	unprocessedKeys := make([]counterKey, 0, 100)
-	// starting with a fixed capacity allows this slice to live on the stack unless it grows past that limit
-	for key := range snapshot.counters {
-		unprocessedKeys = append(unprocessedKeys, key)
-	}
-
-	for i, key := range unprocessedKeys {
-		if key.key == "" {
-			continue // we've already consumed this one when we saw the same flag key further up
-		}
-		// Now we've got a flag key that we haven't seen before
-		flagKey := key.key
-		firstValue := snapshot.counters[key]
-
-		flagObj := flagsObj.Name(flagKey).Object()
-
-		firstValue.flagDefault.WriteToJSONWriter(flagObj.Name("default"))
+		flagSummary.defaultValue.WriteToJSONWriter(flagObj.Name("default"))
 
 		countersArr := flagObj.Name("counters").Array()
-
-		// Iterate over the remainder of the list to find any more entries for the same flag key.
-		for j := i; j < len(unprocessedKeys); j++ {
-			var anotherKey counterKey
-			var anotherValue *counterValue
-			if j == i {
-				anotherKey = key
-				anotherValue = firstValue
-			} else {
-				anotherKey = unprocessedKeys[j]
-				if anotherKey.key != flagKey {
-					continue
-				}
-				anotherValue = snapshot.counters[anotherKey]
-				unprocessedKeys[j].key = "" // clear this one so we'll skip it in the next pass
-			}
-
+		for counterKey, counterValue := range flagSummary.counters {
 			counterObj := countersArr.Object()
-			counterObj.Maybe("variation", anotherKey.variation.IsDefined()).Int(anotherKey.variation.IntValue())
-			if anotherKey.version.IsDefined() {
-				counterObj.Name("version").Int(anotherKey.version.IntValue())
+			counterObj.Maybe("variation", counterKey.variation.IsDefined()).Int(counterKey.variation.IntValue())
+			if counterKey.version.IsDefined() {
+				counterObj.Name("version").Int(counterKey.version.IntValue())
 			} else {
 				counterObj.Name("unknown").Bool(true)
 			}
-			anotherValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
-			counterObj.Name("count").Int(anotherValue.count)
+			counterValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
+			counterObj.Name("count").Int(counterValue.count)
 			counterObj.End()
 		}
-
 		countersArr.End()
+
+		contextKindsArr := flagObj.Name("contextKinds").Array()
+		for kind := range flagSummary.contextKinds {
+			contextKindsArr.String(string(kind))
+		}
+		contextKindsArr.End()
+
 		flagObj.End()
 	}
-	flagsObj.End()
+	allFlagsObj.End()
+
 	obj.End()
 }
