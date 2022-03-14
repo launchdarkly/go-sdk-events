@@ -305,7 +305,7 @@ func (ed *eventDispatcher) triggerFlush() {
 	// Is there anything to flush?
 	payload := ed.outbox.getPayload()
 	totalEventCount := len(payload.events)
-	if len(payload.summary.counters) > 0 {
+	if payload.summary.hasCounters() {
 		totalEventCount++
 	}
 	if totalEventCount == 0 {
