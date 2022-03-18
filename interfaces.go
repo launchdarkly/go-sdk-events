@@ -1,7 +1,7 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
 
 // EventProcessor defines the interface for dispatching analytics events.
