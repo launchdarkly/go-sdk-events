@@ -1,9 +1,9 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 // Manages the state of summarizable information for the EventProcessor, including the

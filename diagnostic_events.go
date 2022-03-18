@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 type diagnosticStreamInitInfo struct {

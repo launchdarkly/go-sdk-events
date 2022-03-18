@@ -1,9 +1,9 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
 
 // In this file we create the analytics event JSON data that we send to LaunchDarkly. This does not

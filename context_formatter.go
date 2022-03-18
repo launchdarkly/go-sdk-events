@@ -1,11 +1,11 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldattr"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldcontext"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v3/ldattr"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 
-	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
+	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
 )
 
 // eventContextFormatter provides the special JSON serialization format that is used when including Context

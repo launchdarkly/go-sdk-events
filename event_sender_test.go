@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldlog"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 
 	"github.com/launchdarkly/go-test-helpers/v2/httphelpers"
 

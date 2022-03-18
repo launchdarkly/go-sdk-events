@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldlog"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v3/ldvalue"
+	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
+	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 type defaultEventProcessor struct {
