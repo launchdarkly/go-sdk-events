@@ -11,6 +11,11 @@ import (
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
+// anyEventInput and anyEventOutput only exist to make it a little clearer in the code whether we're referring
+// to something in the inbox or the outbox.
+type anyEventInput interface{}
+type anyEventOutput interface{}
+
 type defaultEventProcessor struct {
 	inboxCh       chan eventDispatcherMessage
 	inboxFullOnce sync.Once
@@ -34,7 +39,7 @@ type eventDispatcher struct {
 
 type flushPayload struct {
 	diagnosticEvent ldvalue.Value
-	events          []commonEvent
+	events          []anyEventOutput
 	summary         eventSummary
 }
 
@@ -42,7 +47,7 @@ type flushPayload struct {
 type eventDispatcherMessage interface{}
 
 type sendEventMessage struct {
-	event commonEvent
+	event anyEventInput
 }
 
 type flushEventsMessage struct{}
@@ -235,15 +240,18 @@ func (ed *eventDispatcher) runMainLoop(
 	}
 }
 
-func (ed *eventDispatcher) processEvent(evt commonEvent) {
+func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
-	var debugEvent commonEvent
+	var debugEvent anyEventInput
 	inlinedUser := false
-	var baseEvent Event
+	var eventContext EventContext
+	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
 	case EvaluationData:
+		eventContext = evt.Context
+		creationDate = evt.CreationDate
 		ed.outbox.addToSummary(evt) // add all feature events to summaries
 		willAddFullEvent = evt.RequireFullEvent
 		if ed.shouldDebugEvent(&evt) {
@@ -251,25 +259,26 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 			de.debug = true
 			debugEvent = de
 		}
-		baseEvent = evt
 	case IdentifyEventData:
+		eventContext = evt.Context
+		creationDate = evt.CreationDate
 		inlinedUser = true
-		baseEvent = evt
 	case CustomEventData:
-		baseEvent = evt
+		eventContext = evt.Context
+		creationDate = evt.CreationDate
 	default:
 		ed.outbox.addEvent(evt)
 		return
 	}
 	// For each context we haven't seen before, we add an index event before the event that referenced
 	// the context - unless the original event will contain an inline context (e.g. an identify event).
-	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().Context.context.FullyQualifiedKey())
+	alreadySeenUser := ed.userKeys.add(eventContext.context.FullyQualifiedKey())
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
 			ed.deduplicatedContexts++
 		} else {
 			indexEvent := indexEvent{
-				BaseEvent{CreationDate: baseEvent.GetBase().CreationDate, Context: baseEvent.GetBase().Context},
+				BaseEvent{CreationDate: creationDate, Context: eventContext},
 			}
 			ed.outbox.addEvent(indexEvent)
 		}
