@@ -12,10 +12,10 @@ import (
 func TestNullEventProcessor(t *testing.T) {
 	// Just verifies that these methods don't panic
 	n := NewNullEventProcessor()
-	n.RecordFeatureRequestEvent(defaultEventFactory.NewUnknownFlagEvent("x", basicContext(), ldvalue.Null(),
+	n.RecordEvaluation(defaultEventFactory.NewUnknownFlagEvaluationData("x", basicContext(), ldvalue.Null(),
 		ldreason.EvaluationReason{}))
-	n.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEvent(basicContext()))
-	n.RecordCustomEvent(defaultEventFactory.NewCustomEvent("x", basicContext(), ldvalue.Null(), false, 0))
+	n.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext()))
+	n.RecordCustomEvent(defaultEventFactory.NewCustomEventData("x", basicContext(), ldvalue.Null(), false, 0))
 	n.Flush()
 	require.NoError(t, n.Close())
 }

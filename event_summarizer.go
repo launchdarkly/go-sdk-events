@@ -51,38 +51,38 @@ func (s eventSummary) hasCounters() bool {
 }
 
 // Adds this event to our counters.
-func (s *eventSummarizer) summarizeEvent(fe FeatureRequestEvent) {
-	flag, ok := s.eventsState.flags[fe.Key]
+func (s *eventSummarizer) summarizeEvent(ed EvaluationData) {
+	flag, ok := s.eventsState.flags[ed.Key]
 	if !ok {
 		flag = flagSummary{
 			counters:     make(map[counterKey]*counterValue),
 			contextKinds: make(map[ldcontext.Kind]struct{}),
-			defaultValue: fe.Default,
+			defaultValue: ed.Default,
 		}
-		s.eventsState.flags[fe.Key] = flag
+		s.eventsState.flags[ed.Key] = flag
 	}
 
-	counterKey := counterKey{variation: fe.Variation, version: fe.Version}
+	counterKey := counterKey{variation: ed.Variation, version: ed.Version}
 	if value, ok := flag.counters[counterKey]; ok {
 		value.count++
 	} else {
 		flag.counters[counterKey] = &counterValue{
 			count:     1,
-			flagValue: fe.Value,
+			flagValue: ed.Value,
 		}
 	}
 
-	if fe.Context.context.Multiple() {
-		for i := 0; i < fe.Context.context.MultiKindCount(); i++ {
-			if mc, ok := fe.Context.context.MultiKindByIndex(i); ok {
+	if ed.Context.context.Multiple() {
+		for i := 0; i < ed.Context.context.MultiKindCount(); i++ {
+			if mc, ok := ed.Context.context.MultiKindByIndex(i); ok {
 				flag.contextKinds[mc.Kind()] = struct{}{}
 			}
 		}
 	} else {
-		flag.contextKinds[fe.Context.context.Kind()] = struct{}{}
+		flag.contextKinds[ed.Context.context.Kind()] = struct{}{}
 	}
 
-	creationDate := fe.CreationDate
+	creationDate := ed.CreationDate
 	if s.eventsState.startDate == 0 || creationDate < s.eventsState.startDate {
 		s.eventsState.startDate = creationDate
 	}

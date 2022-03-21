@@ -61,15 +61,15 @@ func featureEventForFlag(flag FlagEventProperties) m.Matcher {
 		m.JSONProperty("key").Should(m.Equal(flag.Key)))
 }
 
-func featureEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties) m.Matcher {
+func featureEventWithAllProperties(sourceEvent EvaluationData, flag FlagEventProperties) m.Matcher {
 	return matchFeatureOrDebugEvent(sourceEvent, flag, false, nil)
 }
 
-func debugEventWithAllProperties(sourceEvent FeatureRequestEvent, flag FlagEventProperties, contextJSON interface{}) m.Matcher {
+func debugEventWithAllProperties(sourceEvent EvaluationData, flag FlagEventProperties, contextJSON interface{}) m.Matcher {
 	return matchFeatureOrDebugEvent(sourceEvent, flag, true, contextJSON)
 }
 
-func matchFeatureOrDebugEvent(sourceEvent FeatureRequestEvent, flag FlagEventProperties,
+func matchFeatureOrDebugEvent(sourceEvent EvaluationData, flag FlagEventProperties,
 	debug bool, inlineContext interface{}) m.Matcher {
 	props := map[string]interface{}{
 		"kind":         "feature",
