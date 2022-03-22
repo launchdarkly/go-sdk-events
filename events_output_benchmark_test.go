@@ -47,7 +47,7 @@ func makeBasicEvents() []commonEvent {
 			Build()),
 	}
 	return []commonEvent{
-		FeatureRequestEvent{
+		EvaluationData{
 			BaseEvent: baseEvent,
 			Key:       "flag1",
 			Variation: ldvalue.NewOptionalInt(1),
@@ -56,14 +56,14 @@ func makeBasicEvents() []commonEvent {
 			Reason:    ldreason.NewEvalReasonFallthrough(),
 			Version:   ldvalue.NewOptionalInt(10),
 		},
-		CustomEvent{
+		CustomEventData{
 			BaseEvent:   baseEvent,
 			Key:         "event1",
 			Data:        ldvalue.String("data"),
 			HasMetric:   true,
 			MetricValue: 1234,
 		},
-		IdentifyEvent{BaseEvent: baseEvent},
+		IdentifyEventData{BaseEvent: baseEvent},
 		indexEvent{BaseEvent: baseEvent},
 	}
 }
@@ -80,15 +80,15 @@ func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 	ef := eventOutputFormatter{config: basicConfigWithoutPrivateAttrs()}
 
 	es := newEventSummarizer()
-	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
 		false, flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
+	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
 		false, flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
 		false, flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+	es.summarizeEvent(factory.NewEvaluationData(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
 		false, flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
+	es.summarizeEvent(factory.NewEvaluationData(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
 		false, flag2Default, ""))
 	summary := es.snapshot()
 

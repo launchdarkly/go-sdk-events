@@ -26,7 +26,7 @@ func TestEventFactory(t *testing.T) {
 	t.Run("NewSuccessfulEvalEvent", func(t *testing.T) {
 		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
-		expected := FeatureRequestEvent{
+		expected := EvaluationData{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
@@ -40,23 +40,23 @@ func TestEventFactory(t *testing.T) {
 			PrereqOf:  ldvalue.NewOptionalString("pre"),
 		}
 
-		event1 := withoutReasons.NewEvalEvent(flag, context,
+		event1 := withoutReasons.NewEvaluationData(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
 			false, expected.Default, "pre")
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 
-		event2 := withReasons.NewEvalEvent(flag, context,
+		event2 := withReasons.NewEvaluationData(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
 			false, expected.Default, "pre")
 		assert.Equal(t, expected, event2)
 	})
 
-	t.Run("NewSuccessfulEvalEvent with tracking/debugging", func(t *testing.T) {
+	t.Run("NewEvaluationData with tracking/debugging", func(t *testing.T) {
 		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
-		expected := FeatureRequestEvent{
+		expected := EvaluationData{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
@@ -72,7 +72,7 @@ func TestEventFactory(t *testing.T) {
 		flag1.RequireFullEvent = true
 		expected1 := expected
 		expected1.RequireFullEvent = true
-		event1 := withoutReasons.NewEvalEvent(flag1, context,
+		event1 := withoutReasons.NewEvaluationData(flag1, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			false, expected.Default, "")
 		assert.Equal(t, expected1, event1)
@@ -81,16 +81,16 @@ func TestEventFactory(t *testing.T) {
 		flag2.DebugEventsUntilDate = ldtime.UnixMillisecondTime(200000)
 		expected2 := expected
 		expected2.DebugEventsUntilDate = flag2.DebugEventsUntilDate
-		event2 := withoutReasons.NewEvalEvent(flag2, context,
+		event2 := withoutReasons.NewEvaluationData(flag2, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			false, expected.Default, "")
 		assert.Equal(t, expected2, event2)
 	})
 
-	t.Run("NewSuccessfulEvalEvent with experimentation", func(t *testing.T) {
+	t.Run("NewEvaluationData with experimentation", func(t *testing.T) {
 		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
-		expected := FeatureRequestEvent{
+		expected := EvaluationData{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
@@ -104,14 +104,14 @@ func TestEventFactory(t *testing.T) {
 			RequireFullEvent: true,
 		}
 
-		event := withoutReasons.NewEvalEvent(flag, context,
+		event := withoutReasons.NewEvaluationData(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
 			true, expected.Default, "")
 		assert.Equal(t, expected, event)
 	})
 
-	t.Run("NewUnknownFlagEvent", func(t *testing.T) {
-		expected := FeatureRequestEvent{
+	t.Run("NewUnknownFlagEvaluationData", func(t *testing.T) {
+		expected := EvaluationData{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
@@ -122,18 +122,18 @@ func TestEventFactory(t *testing.T) {
 			Reason:  ldreason.NewEvalReasonFallthrough(),
 		}
 
-		event1 := withoutReasons.NewUnknownFlagEvent(expected.Key, context, expected.Default, expected.Reason)
+		event1 := withoutReasons.NewUnknownFlagEvaluationData(expected.Key, context, expected.Default, expected.Reason)
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event1.GetCreationDate())
 
-		event2 := withReasons.NewUnknownFlagEvent(expected.Key, context, expected.Default, expected.Reason)
+		event2 := withReasons.NewUnknownFlagEvaluationData(expected.Key, context, expected.Default, expected.Reason)
 		assert.Equal(t, expected, event2)
 	})
 
 	t.Run("NewCustomEvent", func(t *testing.T) {
-		expected := CustomEvent{
+		expected := CustomEventData{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
@@ -144,20 +144,20 @@ func TestEventFactory(t *testing.T) {
 			MetricValue: 2,
 		}
 
-		event := withoutReasons.NewCustomEvent(expected.Key, context, expected.Data, true, expected.MetricValue)
+		event := withoutReasons.NewCustomEventData(expected.Key, context, expected.Data, true, expected.MetricValue)
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})
 
 	t.Run("NewIdentifyEvent", func(t *testing.T) {
-		expected := IdentifyEvent{
+		expected := IdentifyEventData{
 			BaseEvent: BaseEvent{
 				CreationDate: fakeTime,
 				Context:      context,
 			},
 		}
 
-		event := withoutReasons.NewIdentifyEvent(context)
+		event := withoutReasons.NewIdentifyEventData(context)
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
 	})

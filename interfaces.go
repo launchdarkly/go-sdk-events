@@ -1,21 +1,27 @@
 package ldevents
 
 import (
+	"encoding/json"
+
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
 
 // EventProcessor defines the interface for dispatching analytics events.
 type EventProcessor interface {
-	// RecordFeatureRequestEvent records a FeatureRequestEvent asynchronously. Depending on the feature
+	// RecordEvaluation records evaluation information asynchronously. Depending on the feature
 	// flag properties and event properties, this may be transmitted to the events service as an
 	// individual event, or may only be added into summary data.
-	RecordFeatureRequestEvent(FeatureRequestEvent)
+	RecordEvaluation(EvaluationData)
 
-	// RecordIdentifyEvent records an IdentifyEvent asynchronously.
-	RecordIdentifyEvent(IdentifyEvent)
+	// RecordIdentifyEvent records an identify event asynchronously.
+	RecordIdentifyEvent(IdentifyEventData)
 
-	// RecordCustomEvent records a CustomEvent asynchronously.
-	RecordCustomEvent(CustomEvent)
+	// RecordCustomEvent records a custom event asynchronously.
+	RecordCustomEvent(CustomEventData)
+
+	// RecordRawEvent adds an event to the output buffer that is not parsed or transformed in any way.
+	// This is used by the Relay Proxy when forwarding events.
+	RecordRawEvent(data json.RawMessage)
 
 	// Flush specifies that any buffered events should be sent as soon as possible, rather than waiting
 	// for the next flush interval. This method is asynchronous, so events still may not be sent

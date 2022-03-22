@@ -62,7 +62,7 @@ func makeBenchmarkUsers() []ldcontext.Context {
 }
 
 func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
-	events := make([]FeatureRequestEvent, 0, benchmarkEventCount)
+	events := make([]EvaluationData, 0, benchmarkEventCount)
 	users := makeBenchmarkUsers()
 	flagCount := 10
 	flagVersions := 3
@@ -71,7 +71,7 @@ func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
 
 	for i := 0; i < benchmarkEventCount; i++ {
 		variation := rnd.Intn(flagVariations)
-		event := FeatureRequestEvent{
+		event := EvaluationData{
 			BaseEvent: BaseEvent{
 				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),
@@ -87,19 +87,19 @@ func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
 
 	return func(ep EventProcessor) {
 		for _, e := range events {
-			ep.RecordFeatureRequestEvent(e)
+			ep.RecordEvaluation(e)
 		}
 	}
 }
 
 func sendBenchmarkCustomEvents() func(EventProcessor) {
-	events := make([]CustomEvent, 0, benchmarkEventCount)
+	events := make([]CustomEventData, 0, benchmarkEventCount)
 	users := makeBenchmarkUsers()
 	keyCount := 5
 	rnd := rand.New(rand.NewSource(int64(ldtime.UnixMillisNow())))
 
 	for i := 0; i < benchmarkEventCount; i++ {
-		event := CustomEvent{
+		event := CustomEventData{
 			BaseEvent: BaseEvent{
 				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),

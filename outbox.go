@@ -35,8 +35,8 @@ func (b *eventsOutbox) addEvent(event commonEvent) {
 	b.events = append(b.events, event)
 }
 
-func (b *eventsOutbox) addToSummary(event FeatureRequestEvent) {
-	b.summarizer.summarizeEvent(event)
+func (b *eventsOutbox) addToSummary(ed EvaluationData) {
+	b.summarizer.summarizeEvent(ed)
 }
 
 func (b *eventsOutbox) getPayload() flushPayload {

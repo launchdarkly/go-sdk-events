@@ -11,8 +11,8 @@ import (
 )
 
 func makeEvalEventWithContext(context ldcontext.Context, creationDate ldtime.UnixMillisecondTime, flagKey string,
-	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) FeatureRequestEvent {
-	return FeatureRequestEvent{
+	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) EvaluationData {
+	return EvaluationData{
 		BaseEvent: BaseEvent{CreationDate: creationDate, Context: Context(context)},
 		Key:       flagKey,
 		Version:   flagVersion,
@@ -23,7 +23,7 @@ func makeEvalEventWithContext(context ldcontext.Context, creationDate ldtime.Uni
 }
 
 func makeEvalEvent(creationDate ldtime.UnixMillisecondTime, flagKey string,
-	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) FeatureRequestEvent {
+	flagVersion ldvalue.OptionalInt, variation ldvalue.OptionalInt, value, defaultValue string) EvaluationData {
 	return makeEvalEventWithContext(ldcontext.New("key"),
 		creationDate, flagKey, flagVersion, variation, value, defaultValue)
 }
@@ -54,7 +54,7 @@ func TestSummarizeEventIncrementsCounters(t *testing.T) {
 	event3 := makeEvalEvent(0, flagKey2, flagVersion2, variation1, "value99", "default2")
 	event4 := makeEvalEvent(0, flagKey1, flagVersion1, variation1, "value1", "default1")
 	event5 := makeEvalEvent(0, unknownFlagKey, undefInt, undefInt, "default3", "default3")
-	for _, e := range []FeatureRequestEvent{event1, event2, event3, event4, event5} {
+	for _, e := range []EvaluationData{event1, event2, event3, event4, event5} {
 		es.summarizeEvent(e)
 	}
 	data := es.snapshot()
@@ -94,7 +94,7 @@ func TestCounterForNilVariationIsDistinctFromOthers(t *testing.T) {
 	event1 := makeEvalEvent(0, flagKey, flagVersion, variation1, "value1", "default1")
 	event2 := makeEvalEvent(0, flagKey, flagVersion, variation2, "value2", "default1")
 	event3 := makeEvalEvent(0, flagKey, flagVersion, undefInt, "default1", "default1")
-	for _, e := range []FeatureRequestEvent{event1, event2, event3} {
+	for _, e := range []EvaluationData{event1, event2, event3} {
 		es.summarizeEvent(e)
 	}
 	data := es.snapshot()
@@ -124,7 +124,7 @@ func TestSummaryContextKindsAreTrackedPerFlag(t *testing.T) {
 	event2 := makeEvalEventWithContext(context2, 0, flagKey1, flagVersion1, variation2, "value2", "default1")
 	event3 := makeEvalEventWithContext(context2, 0, flagKey2, flagVersion2, variation1, "value99", "default2")
 	event4 := makeEvalEventWithContext(context3, 0, flagKey1, flagVersion1, variation1, "value1", "default1")
-	for _, e := range []FeatureRequestEvent{event1, event2, event3, event4} {
+	for _, e := range []EvaluationData{event1, event2, event3, event4} {
 		es.summarizeEvent(e)
 	}
 	data := es.snapshot()

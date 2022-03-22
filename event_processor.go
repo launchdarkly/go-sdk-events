@@ -69,15 +69,15 @@ func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
 	}
 }
 
-func (ep *defaultEventProcessor) RecordFeatureRequestEvent(e FeatureRequestEvent) {
+func (ep *defaultEventProcessor) RecordEvaluation(ed EvaluationData) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: ed})
+}
+
+func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEventData) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
-func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {
-	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
-}
-
-func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEvent) {
+func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEventData) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
@@ -243,7 +243,7 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	inlinedUser := false
 	var baseEvent Event
 	switch evt := evt.(type) {
-	case FeatureRequestEvent:
+	case EvaluationData:
 		ed.outbox.addToSummary(evt) // add all feature events to summaries
 		willAddFullEvent = evt.RequireFullEvent
 		if ed.shouldDebugEvent(&evt) {
@@ -252,10 +252,10 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 			debugEvent = de
 		}
 		baseEvent = evt
-	case IdentifyEvent:
+	case IdentifyEventData:
 		inlinedUser = true
 		baseEvent = evt
-	case CustomEvent:
+	case CustomEventData:
 		baseEvent = evt
 	default:
 		ed.outbox.addEvent(evt)
@@ -282,7 +282,7 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	}
 }
 
-func (ed *eventDispatcher) shouldDebugEvent(evt *FeatureRequestEvent) bool {
+func (ed *eventDispatcher) shouldDebugEvent(evt *EvaluationData) bool {
 	if evt.DebugEventsUntilDate == 0 {
 		return false
 	}

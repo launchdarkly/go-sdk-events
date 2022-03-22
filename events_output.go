@@ -54,7 +54,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 	obj := w.Object()
 
 	switch evt := evt.(type) {
-	case FeatureRequestEvent:
+	case EvaluationData:
 		kind := FeatureRequestEventKind
 		if evt.debug {
 			kind = FeatureDebugEventKind
@@ -75,7 +75,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 			evt.Reason.WriteToJSONWriter(obj.Name("reason"))
 		}
 
-	case CustomEvent:
+	case CustomEventData:
 		beginEventFields(&obj, CustomEventKind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		if !evt.Data.IsNull() {
@@ -84,7 +84,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 		writeContextKeys(&obj, &evt.Context.context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
-	case IdentifyEvent:
+	case IdentifyEventData:
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 
