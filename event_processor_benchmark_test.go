@@ -5,9 +5,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/lduser"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 const benchmarkEventCount = 100
@@ -19,7 +20,6 @@ const benchmarkEventCount = 100
 
 func BenchmarkEventProcessor(b *testing.B) {
 	configDefault := EventsConfiguration{Capacity: 1000}
-	configWithInlineUsers := EventsConfiguration{Capacity: 1000, InlineUsersInEvents: true}
 
 	doEvents := func(b *testing.B, config EventsConfiguration, sendEvents func(EventProcessor)) {
 		ep, es := createBenchmarkEventProcessorAndSender(config)
@@ -47,15 +47,11 @@ func BenchmarkEventProcessor(b *testing.B) {
 	b.Run("custom events", func(b *testing.B) {
 		doEvents(b, configDefault, sendBenchmarkCustomEvents())
 	})
-
-	b.Run("custom events with inline users", func(b *testing.B) {
-		doEvents(b, configWithInlineUsers, sendBenchmarkCustomEvents())
-	})
 }
 
-func makeBenchmarkUsers() []lduser.User {
+func makeBenchmarkUsers() []ldcontext.Context {
 	numUsers := 10
-	ret := make([]lduser.User, 0, numUsers)
+	ret := make([]ldcontext.Context, 0, numUsers)
 	for i := 0; i < numUsers; i++ {
 		user := lduser.NewUserBuilder(fmt.Sprintf("user%d", i)).
 			Name(fmt.Sprintf("name%d", i)).
@@ -66,7 +62,7 @@ func makeBenchmarkUsers() []lduser.User {
 }
 
 func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
-	events := make([]FeatureRequestEvent, 0, benchmarkEventCount)
+	events := make([]EvaluationData, 0, benchmarkEventCount)
 	users := makeBenchmarkUsers()
 	flagCount := 10
 	flagVersions := 3
@@ -75,37 +71,37 @@ func sendBenchmarkFeatureEvents(tracking bool) func(EventProcessor) {
 
 	for i := 0; i < benchmarkEventCount; i++ {
 		variation := rnd.Intn(flagVariations)
-		event := FeatureRequestEvent{
+		event := EvaluationData{
 			BaseEvent: BaseEvent{
-				User:         EventUser{User: users[rnd.Intn(len(users))]},
+				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),
 			},
-			Key:         fmt.Sprintf("flag%d", rnd.Intn(flagCount)),
-			Version:     ldvalue.NewOptionalInt(rnd.Intn(flagVersions) + 1),
-			Variation:   ldvalue.NewOptionalInt(variation),
-			Value:       ldvalue.Int(variation),
-			TrackEvents: tracking,
+			Key:              fmt.Sprintf("flag%d", rnd.Intn(flagCount)),
+			Version:          ldvalue.NewOptionalInt(rnd.Intn(flagVersions) + 1),
+			Variation:        ldvalue.NewOptionalInt(variation),
+			Value:            ldvalue.Int(variation),
+			RequireFullEvent: tracking,
 		}
 		events = append(events, event)
 	}
 
 	return func(ep EventProcessor) {
 		for _, e := range events {
-			ep.RecordFeatureRequestEvent(e)
+			ep.RecordEvaluation(e)
 		}
 	}
 }
 
 func sendBenchmarkCustomEvents() func(EventProcessor) {
-	events := make([]CustomEvent, 0, benchmarkEventCount)
+	events := make([]CustomEventData, 0, benchmarkEventCount)
 	users := makeBenchmarkUsers()
 	keyCount := 5
 	rnd := rand.New(rand.NewSource(int64(ldtime.UnixMillisNow())))
 
 	for i := 0; i < benchmarkEventCount; i++ {
-		event := CustomEvent{
+		event := CustomEventData{
 			BaseEvent: BaseEvent{
-				User:         EventUser{User: users[rnd.Intn(len(users))]},
+				Context:      Context(users[rnd.Intn(len(users))]),
 				CreationDate: ldtime.UnixMillisNow(),
 			},
 			Key:  fmt.Sprintf("event%d", rnd.Intn(keyCount)),

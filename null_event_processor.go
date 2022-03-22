@@ -1,5 +1,7 @@
 package ldevents
 
+import "encoding/json"
+
 type nullEventProcessor struct{}
 
 // NewNullEventProcessor creates a no-op implementation of EventProcessor.
@@ -7,13 +9,13 @@ func NewNullEventProcessor() EventProcessor {
 	return nullEventProcessor{}
 }
 
-func (n nullEventProcessor) RecordFeatureRequestEvent(e FeatureRequestEvent) {}
+func (n nullEventProcessor) RecordEvaluation(ed EvaluationData) {}
 
-func (n nullEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {}
+func (n nullEventProcessor) RecordIdentifyEvent(e IdentifyEventData) {}
 
-func (n nullEventProcessor) RecordCustomEvent(e CustomEvent) {}
+func (n nullEventProcessor) RecordCustomEvent(e CustomEventData) {}
 
-func (n nullEventProcessor) RecordAliasEvent(e AliasEvent) {}
+func (n nullEventProcessor) RecordRawEvent(data json.RawMessage) {}
 
 func (n nullEventProcessor) Flush() {}
 

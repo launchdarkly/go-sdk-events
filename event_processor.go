@@ -1,14 +1,20 @@
 package ldevents
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
-	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
+	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
+
+// anyEventInput and anyEventOutput only exist to make it a little clearer in the code whether we're referring
+// to something in the inbox or the outbox.
+type anyEventInput interface{}
+type anyEventOutput interface{}
 
 type defaultEventProcessor struct {
 	inboxCh       chan eventDispatcherMessage
@@ -18,22 +24,22 @@ type defaultEventProcessor struct {
 }
 
 type eventDispatcher struct {
-	config             EventsConfiguration
-	outbox             *eventsOutbox
-	flushCh            chan *flushPayload
-	workersGroup       *sync.WaitGroup
-	userKeys           lruCache
-	lastKnownPastTime  ldtime.UnixMillisecondTime
-	deduplicatedUsers  int
-	eventsInLastBatch  int
-	disabled           bool
-	currentTimestampFn func() ldtime.UnixMillisecondTime
-	stateLock          sync.Mutex
+	config               EventsConfiguration
+	outbox               *eventsOutbox
+	flushCh              chan *flushPayload
+	workersGroup         *sync.WaitGroup
+	userKeys             lruCache
+	lastKnownPastTime    ldtime.UnixMillisecondTime
+	deduplicatedContexts int
+	eventsInLastBatch    int
+	disabled             bool
+	currentTimestampFn   func() ldtime.UnixMillisecondTime
+	stateLock            sync.Mutex
 }
 
 type flushPayload struct {
 	diagnosticEvent ldvalue.Value
-	events          []commonEvent
+	events          []anyEventOutput
 	summary         eventSummary
 }
 
@@ -41,7 +47,7 @@ type flushPayload struct {
 type eventDispatcherMessage interface{}
 
 type sendEventMessage struct {
-	event commonEvent
+	event anyEventInput
 }
 
 type flushEventsMessage struct{}
@@ -68,20 +74,20 @@ func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
 	}
 }
 
-func (ep *defaultEventProcessor) RecordFeatureRequestEvent(e FeatureRequestEvent) {
+func (ep *defaultEventProcessor) RecordEvaluation(ed EvaluationData) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: ed})
+}
+
+func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEventData) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
-func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEvent) {
+func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEventData) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
-func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEvent) {
-	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
-}
-
-func (ep *defaultEventProcessor) RecordAliasEvent(e AliasEvent) {
-	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+func (ep *defaultEventProcessor) RecordRawEvent(data json.RawMessage) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: rawEvent{data: data}})
 }
 
 func (ep *defaultEventProcessor) Flush() {
@@ -133,10 +139,15 @@ func startEventDispatcher(
 		ed.currentTimestampFn = ldtime.UnixMillisNow
 	}
 
+	formatter := &eventOutputFormatter{
+		contextFormatter: newEventContextFormatter(config),
+		config:           config,
+	}
+
 	// Start a fixed-size pool of workers that wait on flushTriggerCh. This is the
 	// maximum number of flushes we can do concurrently.
 	for i := 0; i < maxFlushWorkers; i++ {
-		go runFlushTask(config, ed.flushCh, ed.workersGroup, ed.handleResult)
+		go runFlushTask(config, formatter, ed.flushCh, ed.workersGroup, ed.handleResult)
 	}
 	if config.DiagnosticsManager != nil {
 		event := config.DiagnosticsManager.CreateInitEvent()
@@ -218,55 +229,56 @@ func (ed *eventDispatcher) runMainLoop(
 			}
 			event := diagnosticsManager.CreateStatsEventAndReset(
 				ed.outbox.droppedEvents,
-				ed.deduplicatedUsers,
+				ed.deduplicatedContexts,
 				ed.eventsInLastBatch,
 			)
 			ed.outbox.droppedEvents = 0
-			ed.deduplicatedUsers = 0
+			ed.deduplicatedContexts = 0
 			ed.eventsInLastBatch = 0
 			ed.sendDiagnosticsEvent(event)
 		}
 	}
 }
 
-func (ed *eventDispatcher) processEvent(evt commonEvent) {
+func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
-	var debugEvent commonEvent
-	inlinedUser := ed.config.InlineUsersInEvents
-	var baseEvent Event
+	var debugEvent anyEventInput
+	inlinedUser := false
+	var eventContext EventContext
+	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
-	case FeatureRequestEvent:
+	case EvaluationData:
+		eventContext = evt.Context
+		creationDate = evt.CreationDate
 		ed.outbox.addToSummary(evt) // add all feature events to summaries
-		willAddFullEvent = evt.TrackEvents
+		willAddFullEvent = evt.RequireFullEvent
 		if ed.shouldDebugEvent(&evt) {
 			de := evt
-			de.Debug = true
+			de.debug = true
 			debugEvent = de
 		}
-		baseEvent = evt
-	case IdentifyEvent:
+	case IdentifyEventData:
+		eventContext = evt.Context
+		creationDate = evt.CreationDate
 		inlinedUser = true
-		baseEvent = evt
-	case CustomEvent:
-		baseEvent = evt
-	case AliasEvent:
+	case CustomEventData:
+		eventContext = evt.Context
+		creationDate = evt.CreationDate
+	default:
 		ed.outbox.addEvent(evt)
-	}
-	if baseEvent == nil {
 		return
 	}
-	// For each user we haven't seen before, we add an index event before the event that referenced
-	// the user - unless the event must contain an inline user (i.e. if InlineUsersInEvents is true,
-	// or if it is an identify event).
-	alreadySeenUser := ed.userKeys.add(baseEvent.GetBase().User.GetKey())
+	// For each context we haven't seen before, we add an index event before the event that referenced
+	// the context - unless the original event will contain an inline context (e.g. an identify event).
+	alreadySeenUser := ed.userKeys.add(eventContext.context.FullyQualifiedKey())
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
-			ed.deduplicatedUsers++
+			ed.deduplicatedContexts++
 		} else {
 			indexEvent := indexEvent{
-				BaseEvent{CreationDate: baseEvent.GetBase().CreationDate, User: baseEvent.GetBase().User},
+				BaseEvent{CreationDate: creationDate, Context: eventContext},
 			}
 			ed.outbox.addEvent(indexEvent)
 		}
@@ -279,7 +291,7 @@ func (ed *eventDispatcher) processEvent(evt commonEvent) {
 	}
 }
 
-func (ed *eventDispatcher) shouldDebugEvent(evt *FeatureRequestEvent) bool {
+func (ed *eventDispatcher) shouldDebugEvent(evt *EvaluationData) bool {
 	if evt.DebugEventsUntilDate == 0 {
 		return false
 	}
@@ -302,7 +314,7 @@ func (ed *eventDispatcher) triggerFlush() {
 	// Is there anything to flush?
 	payload := ed.outbox.getPayload()
 	totalEventCount := len(payload.events)
-	if len(payload.summary.counters) > 0 {
+	if payload.summary.hasCounters() {
 		totalEventCount++
 	}
 	if totalEventCount == 0 {
@@ -361,12 +373,8 @@ func (ed *eventDispatcher) sendDiagnosticsEvent(
 	}
 }
 
-func runFlushTask(config EventsConfiguration, flushCh <-chan *flushPayload,
+func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
 	workersGroup *sync.WaitGroup, resultFn func(EventSenderResult)) {
-	formatter := eventOutputFormatter{
-		userFilter: newUserFilter(config),
-		config:     config,
-	}
 	for {
 		payload, more := <-flushCh
 		if !more {

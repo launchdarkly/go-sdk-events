@@ -1,11 +1,11 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
 )
 
 type eventsOutbox struct {
-	events           []commonEvent
+	events           []anyEventOutput
 	summarizer       eventSummarizer
 	capacity         int
 	capacityExceeded bool
@@ -15,14 +15,14 @@ type eventsOutbox struct {
 
 func newEventsOutbox(capacity int, loggers ldlog.Loggers) *eventsOutbox {
 	return &eventsOutbox{
-		events:     make([]commonEvent, 0, capacity),
+		events:     make([]anyEventOutput, 0, capacity),
 		summarizer: newEventSummarizer(),
 		capacity:   capacity,
 		loggers:    loggers,
 	}
 }
 
-func (b *eventsOutbox) addEvent(event commonEvent) {
+func (b *eventsOutbox) addEvent(event anyEventInput) {
 	if len(b.events) >= b.capacity {
 		if !b.capacityExceeded {
 			b.capacityExceeded = true
@@ -35,14 +35,14 @@ func (b *eventsOutbox) addEvent(event commonEvent) {
 	b.events = append(b.events, event)
 }
 
-func (b *eventsOutbox) addToSummary(event FeatureRequestEvent) {
-	b.summarizer.summarizeEvent(event)
+func (b *eventsOutbox) addToSummary(ed EvaluationData) {
+	b.summarizer.summarizeEvent(ed)
 }
 
 func (b *eventsOutbox) getPayload() flushPayload {
-	var copied []commonEvent
+	var copied []anyEventOutput
 	if len(b.events) > 0 {
-		copied = make([]commonEvent, len(b.events))
+		copied = make([]anyEventOutput, len(b.events))
 		copy(copied, b.events)
 	}
 	return flushPayload{

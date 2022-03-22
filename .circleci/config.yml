@@ -7,14 +7,13 @@ workflows:
   workflow:
     jobs:
       - go-test:
-          name: Go 1.15
-          docker-image: circleci/golang:1.15
+          name: Go 1.17
+          docker-image: cimg/go:1.17
           run-lint: true
           with-coverage: true
       - go-test:
-          name: Go 1.14
-          docker-image: circleci/golang:1.14
-          run-lint: true
+          name: Go 1.16
+          docker-image: cimg/go:1.16
       - go-test-windows:
           name: Windows
       - benchmarks
@@ -36,6 +35,7 @@ jobs:
         environment:
           CIRCLE_TEST_REPORTS: /tmp/circle-reports
           CIRCLE_ARTIFACTS: /tmp/circle-artifacts
+          GOPRIVATE: github.com/launchdarkly/*-private
 
     steps:
       - checkout
@@ -87,14 +87,14 @@ jobs:
     steps:
       - checkout
       - run: 
-          name: download Go 1.14.13
+          name: download Go 1.16.14
           command: |
             $ErrorActionPreference = "Stop"
-            $installerUrl = "https://golang.org/dl/go1.14.13.windows-amd64.msi"
-            (New-Object System.Net.WebClient).DownloadFile($installerUrl, "go1.14.13.windows-amd64.msi")
+            $installerUrl = "https://go.dev/dl/go1.16.14.windows-amd64.msi"
+            (New-Object System.Net.WebClient).DownloadFile($installerUrl, "go1.16.14.windows-amd64.msi")
       - run:
-          name: install Go 1.14.13
-          command: Start-Process msiexec.exe -Wait -ArgumentList "/I go1.14.13.windows-amd64.msi /quiet"
+          name: install Go 1.16.14
+          command: Start-Process msiexec.exe -Wait -ArgumentList "/I go1.16.14.windows-amd64.msi /quiet"
       - run: go version
       - run:
           name: build and test
@@ -103,7 +103,7 @@ jobs:
 
   benchmarks:
     docker:
-      - image: circleci/golang:1.15
+      - image: cimg/go:1.16
         environment:
           CIRCLE_ARTIFACTS: /tmp/circle-artifacts
 

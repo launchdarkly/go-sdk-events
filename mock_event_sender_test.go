@@ -7,15 +7,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
 
 type mockEventSender struct {
-	events             []ldvalue.Value
-	diagnosticEvents   []ldvalue.Value
-	eventsCh           chan ldvalue.Value
-	diagnosticEventsCh chan ldvalue.Value
+	events             []json.RawMessage
+	diagnosticEvents   []json.RawMessage
+	eventsCh           chan json.RawMessage
+	diagnosticEventsCh chan json.RawMessage
 	payloadCount       int
 	result             EventSenderResult
 	gateCh             <-chan struct{}
@@ -25,29 +23,26 @@ type mockEventSender struct {
 
 func newMockEventSender() *mockEventSender {
 	return &mockEventSender{
-		eventsCh:           make(chan ldvalue.Value, 100),
-		diagnosticEventsCh: make(chan ldvalue.Value, 100),
+		eventsCh:           make(chan json.RawMessage, 100),
+		diagnosticEventsCh: make(chan json.RawMessage, 100),
 		result:             EventSenderResult{Success: true},
 	}
 }
 
 func (ms *mockEventSender) SendEventData(kind EventDataKind, data []byte, eventCount int) EventSenderResult {
-	var jsonData ldvalue.Value
-	err := json.Unmarshal(data, &jsonData)
-	if err != nil {
-		panic(err)
-	}
-
 	ms.lock.Lock()
 	if kind == DiagnosticEventDataKind {
-		ms.diagnosticEvents = append(ms.diagnosticEvents, jsonData)
-		ms.diagnosticEventsCh <- jsonData
+		ms.diagnosticEvents = append(ms.diagnosticEvents, data)
+		ms.diagnosticEventsCh <- data
 	} else {
-		jsonData.Enumerate(func(i int, k string, v ldvalue.Value) bool {
-			ms.events = append(ms.events, v)
-			ms.eventsCh <- v
-			return true
-		})
+		var dataAsArray []json.RawMessage
+		if err := json.Unmarshal(data, &dataAsArray); err != nil {
+			panic(err)
+		}
+		for _, elementData := range dataAsArray {
+			ms.events = append(ms.events, elementData)
+			ms.eventsCh <- elementData
+		}
 		ms.payloadCount++
 	}
 	gateCh, waitingCh := ms.gateCh, ms.waitingCh
@@ -76,22 +71,34 @@ func (ms *mockEventSender) getPayloadCount() int {
 	return ms.payloadCount
 }
 
-func (ms *mockEventSender) awaitEvent(t *testing.T) ldvalue.Value {
-	return ms.awaitEventCh(t, ms.eventsCh)
+func (ms *mockEventSender) awaitEvent(t *testing.T) json.RawMessage {
+	event, ok := ms.tryAwaitEvent()
+	if !ok {
+		require.Fail(t, "timed out waiting for analytics event")
+	}
+	return event
 }
 
-func (ms *mockEventSender) awaitDiagnosticEvent(t *testing.T) ldvalue.Value {
-	return ms.awaitEventCh(t, ms.diagnosticEventsCh)
+func (ms *mockEventSender) tryAwaitEvent() (json.RawMessage, bool) {
+	return ms.tryAwaitEventCh(ms.eventsCh)
 }
 
-func (ms *mockEventSender) awaitEventCh(t *testing.T, ch <-chan ldvalue.Value) ldvalue.Value {
+func (ms *mockEventSender) awaitDiagnosticEvent(t *testing.T) json.RawMessage {
+	event, ok := ms.tryAwaitEventCh(ms.diagnosticEventsCh)
+	if !ok {
+		require.Fail(t, "timed out waiting for diagnostic event")
+	}
+	return event
+}
+
+func (ms *mockEventSender) tryAwaitEventCh(ch <-chan json.RawMessage) (json.RawMessage, bool) {
 	select {
 	case e := <-ch:
-		return e
+		return e, true
 	case <-time.After(time.Second):
-		require.Fail(t, "expected an event but did not receive one")
+		break
 	}
-	return ldvalue.Null()
+	return nil, false
 }
 
 func (ms *mockEventSender) assertNoMoreEvents(t *testing.T) {

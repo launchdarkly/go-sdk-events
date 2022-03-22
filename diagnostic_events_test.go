@@ -4,77 +4,78 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
 )
 
 func TestDiagnosticIDHasRandomID(t *testing.T) {
 	id0 := NewDiagnosticID("sdkkey")
-	key0 := id0.GetByKey("diagnosticId")
-	assert.Equal(t, ldvalue.StringType, key0.Type())
-	assert.NotEqual(t, "", key0.StringValue())
+	m.In(t).Assert(id0, m.JSONProperty("diagnosticId").Should(m.Not(m.Equal(""))))
+
 	id1 := NewDiagnosticID("sdkkey")
-	key1 := id1.GetByKey("diagnosticId")
-	assert.Equal(t, ldvalue.StringType, key1.Type())
-	assert.NotEqual(t, "", key1.StringValue())
-	assert.NotEqual(t, key0, key1)
+	m.In(t).Assert(id1, m.JSONProperty("diagnosticId").Should(
+		m.AllOf(
+			m.Not(m.Equal("")),
+			m.Not(m.Equal(id0.GetByKey("diagnosticId").StringValue())),
+		),
+	))
 }
 
 func TestDiagnosticIDUsesLast6CharsOfSDKKey(t *testing.T) {
 	id := NewDiagnosticID("1234567890")
-	assert.Equal(t, "567890", id.GetByKey("sdkKeySuffix").StringValue())
+	m.In(t).Assert(id, m.JSONProperty("sdkKeySuffix").Should(m.Equal("567890")))
 }
 
 func TestDiagnosticInitEventBaseProperties(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
 	startTime := time.Now()
-	m := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), startTime, nil)
-	event := m.CreateInitEvent()
-	assert.Equal(t, "diagnostic-init", event.GetByKey("kind").StringValue())
-	assert.Equal(t, id, event.GetByKey("id"))
-	assert.Equal(t, float64(ldtime.UnixMillisFromTime(startTime)), event.GetByKey("creationDate").Float64Value())
+	dm := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), startTime, nil)
+	event := dm.CreateInitEvent()
+
+	m.In(t).Assert(event, m.AllOf(
+		m.JSONProperty("kind").Should(m.Equal("diagnostic-init")),
+		m.JSONProperty("id").Should(m.JSONEqual(id)),
+		m.JSONProperty("creationDate").Should(equalNumericTime(ldtime.UnixMillisFromTime(startTime))),
+	))
 }
 
 func TestDiagnosticInitEventConfigData(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
-	configData := ldvalue.ObjectBuild().Set("things", ldvalue.String("stuff")).Build()
-	m := NewDiagnosticsManager(id, configData, ldvalue.Null(), time.Now(), nil)
-	event := m.CreateInitEvent()
-	assert.Equal(t, configData, event.GetByKey("configuration"))
+	configData := ldvalue.ObjectBuild().SetString("things", "stuff").Build()
+	dm := NewDiagnosticsManager(id, configData, ldvalue.Null(), time.Now(), nil)
+	event := dm.CreateInitEvent()
+
+	m.In(t).Assert(event, m.JSONProperty("configuration").Should(m.JSONEqual(configData)))
 }
 
 func TestDiagnosticInitEventSDKData(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
-	sdkData := ldvalue.ObjectBuild().Set("name", ldvalue.String("my-sdk")).Build()
-	m := NewDiagnosticsManager(id, ldvalue.Null(), sdkData, time.Now(), nil)
-	event := m.CreateInitEvent()
-	assert.Equal(t, sdkData, event.GetByKey("sdk"))
+	sdkData := ldvalue.ObjectBuild().SetString("name", "my-sdk").Build()
+	dm := NewDiagnosticsManager(id, ldvalue.Null(), sdkData, time.Now(), nil)
+	event := dm.CreateInitEvent()
+
+	m.In(t).Assert(event, m.JSONProperty("sdk").Should(m.JSONEqual(sdkData)))
 }
 
 func TestDiagnosticInitEventPlatformData(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
-	m := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
-	event := m.CreateInitEvent()
-	assert.Equal(t, "Go", event.GetByKey("platform").GetByKey("name").StringValue())
+	dm := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
+	event := dm.CreateInitEvent()
+
+	m.In(t).Assert(event, m.JSONProperty("platform").Should(m.JSONProperty("name").Should(m.Equal("Go"))))
 }
 
 func TestRecordStreamInit(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
-	m := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
-	m.RecordStreamInit(10000, true, 100)
-	m.RecordStreamInit(20000, false, 50)
-	event := m.CreateStatsEventAndReset(0, 0, 0)
+	dm := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
+	dm.RecordStreamInit(10000, true, 100)
+	dm.RecordStreamInit(20000, false, 50)
+	event := dm.CreateStatsEventAndReset(0, 0, 0)
 
-	streamInits := event.GetByKey("streamInits")
-	assert.Equal(t, 2, streamInits.Count())
-	s0 := streamInits.GetByIndex(0)
-	assert.Equal(t, 10000, s0.GetByKey("timestamp").IntValue())
-	assert.Equal(t, true, s0.GetByKey("failed").BoolValue())
-	assert.Equal(t, 100, s0.GetByKey("durationMillis").IntValue())
-	s1 := streamInits.GetByIndex(1)
-	assert.Equal(t, 20000, s1.GetByKey("timestamp").IntValue())
-	assert.Equal(t, false, s1.GetByKey("failed").BoolValue())
-	assert.Equal(t, 50, s1.GetByKey("durationMillis").IntValue())
+	m.In(t).Assert(event, m.JSONProperty("streamInits").Should(m.Items(
+		m.JSONStrEqual(`{"timestamp": 10000, "failed": true, "durationMillis": 100}`),
+		m.JSONStrEqual(`{"timestamp": 20000, "failed": false, "durationMillis": 50}`),
+	)))
 }

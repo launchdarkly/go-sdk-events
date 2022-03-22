@@ -3,15 +3,11 @@ package ldevents
 import (
 	"testing"
 
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
-)
-
-var (
-	benchmarkBytesResult []byte
-	benchmarkIntResult   int
+	"github.com/launchdarkly/go-sdk-common/v3/ldattr"
+	"github.com/launchdarkly/go-sdk-common/v3/ldreason"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/lduser"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
@@ -27,12 +23,12 @@ func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
 func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B) {
 	events := makeBasicEvents()
 	ef := eventOutputFormatter{
-		userFilter: userFilter{
-			globalPrivateAttributes: []lduser.UserAttribute{
-				lduser.NameAttribute,
-				lduser.UserAttribute("custom-attr"),
+		contextFormatter: newEventContextFormatter(EventsConfiguration{
+			PrivateAttributes: []ldattr.Ref{
+				ldattr.NewNameRef("name"),
+				ldattr.NewNameRef("custom-attr"),
 			},
-		},
+		}),
 	}
 	b.ResetTimer()
 
@@ -41,19 +37,17 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 	}
 }
 
-func makeBasicEvents() []commonEvent {
+func makeBasicEvents() []anyEventOutput {
 	baseEvent := BaseEvent{
 		CreationDate: ldtime.UnixMillisNow(),
-		User: EventUser{
-			User: lduser.NewUserBuilder("user-key").
-				Email("test@example.com").
-				Name("user-name").
-				Custom("custom-attr", ldvalue.Bool(true)).
-				Build(),
-		},
+		Context: Context(lduser.NewUserBuilder("user-key").
+			Email("test@example.com").
+			Name("user-name").
+			Custom("custom-attr", ldvalue.Bool(true)).
+			Build()),
 	}
-	return []commonEvent{
-		FeatureRequestEvent{
+	return []anyEventOutput{
+		EvaluationData{
 			BaseEvent: baseEvent,
 			Key:       "flag1",
 			Variation: ldvalue.NewOptionalInt(1),
@@ -62,40 +56,40 @@ func makeBasicEvents() []commonEvent {
 			Reason:    ldreason.NewEvalReasonFallthrough(),
 			Version:   ldvalue.NewOptionalInt(10),
 		},
-		CustomEvent{
+		CustomEventData{
 			BaseEvent:   baseEvent,
 			Key:         "event1",
 			Data:        ldvalue.String("data"),
 			HasMetric:   true,
 			MetricValue: 1234,
 		},
-		IdentifyEvent{BaseEvent: baseEvent},
+		IdentifyEventData{BaseEvent: baseEvent},
 		indexEvent{BaseEvent: baseEvent},
 	}
 }
 
 func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
-	user := User(lduser.NewUser("u"))
-	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
-	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
+	user := Context(lduser.NewUser("u"))
+	flag1v1 := FlagEventProperties{Key: "flag1", Version: 100}
+	flag1v2 := FlagEventProperties{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")
-	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
+	flag2 := FlagEventProperties{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 	factory := NewEventFactory(false, fakeTimeFn)
 
-	ef := eventOutputFormatter{config: epDefaultConfig}
+	ef := eventOutputFormatter{config: basicConfigWithoutPrivateAttrs()}
 
 	es := newEventSummarizer()
-	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-		flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		flag1Default, ""))
-	es.summarizeEvent(factory.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-		flag2Default, ""))
+	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+		false, flag1Default, ""))
+	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
+		false, flag1Default, ""))
+	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+		false, flag1Default, ""))
+	es.summarizeEvent(factory.NewEvaluationData(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+		false, flag1Default, ""))
+	es.summarizeEvent(factory.NewEvaluationData(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
+		false, flag2Default, ""))
 	summary := es.snapshot()
 
 	b.ResetTimer()

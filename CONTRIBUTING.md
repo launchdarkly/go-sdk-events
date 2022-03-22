@@ -1,6 +1,6 @@
 # Contributing to this project
  
-LaunchDarkly has published an [SDK contributor's guide](https://docs.launchdarkly.com/docs/sdk-contributors-guide) that provides a detailed explanation of how our SDKs work. See below for additional information on how to contribute to this project.
+LaunchDarkly has published an [SDK contributor's guide](https://docs.launchdarkly.com/sdk/concepts/contributors-guide) that provides a detailed explanation of how our SDKs work. See below for additional information on how to contribute to this project.
  
 ## Submitting bug reports and feature requests
 
@@ -14,9 +14,7 @@ We encourage pull requests and other contributions from the community. Before su
  
 ### Prerequisites
  
-This project should be built against Go 1.13 or newer.
-
-Note that the base import path is `gopkg.in/launchdarkly/go-sdk-events.v1`, not `github.com/launchdarkly/go-sdk-events`. This ensures that the package can be referenced not only as a Go module, but also by projects that use older tools like `dep` and `govendor`, because the 5.x release of the Go SDK supports either module or non-module usage. Future releases of this package, and of the Go SDK, may drop support for non-module usage.
+This project should be built against the lowest supported Go version as described in [README.md](./README.md).
 
 ### Building
 

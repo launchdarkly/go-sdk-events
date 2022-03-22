@@ -1,8 +1,9 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-jsonstream.v1/jwriter"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
+	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
 
 // In this file we create the analytics event JSON data that we send to LaunchDarkly. This does not
@@ -14,17 +15,16 @@ const (
 	FeatureDebugEventKind   = "debug"
 	CustomEventKind         = "custom"
 	IdentifyEventKind       = "identify"
-	AliasEventKind          = "alias"
 	IndexEventKind          = "index"
 	SummaryEventKind        = "summary"
 )
 
 type eventOutputFormatter struct {
-	userFilter userFilter
-	config     EventsConfiguration
+	contextFormatter eventContextFormatter
+	config           EventsConfiguration
 }
 
-func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary eventSummary) ([]byte, int) {
+func (ef eventOutputFormatter) makeOutputEvents(events []anyEventOutput, summary eventSummary) ([]byte, int) {
 	n := len(events)
 
 	w := jwriter.NewWriter()
@@ -33,7 +33,7 @@ func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary ev
 	for _, e := range events {
 		ef.writeOutputEvent(&w, e)
 	}
-	if len(summary.counters) > 0 {
+	if summary.hasCounters() {
 		ef.writeSummaryEvent(&w, summary)
 		n++
 	}
@@ -45,23 +45,27 @@ func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary ev
 	return nil, 0
 }
 
-func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEvent) {
+func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventOutput) {
+	if raw, ok := evt.(rawEvent); ok {
+		w.Raw(raw.data)
+		return
+	}
+
 	obj := w.Object()
 
 	switch evt := evt.(type) {
-	case FeatureRequestEvent:
+	case EvaluationData:
 		kind := FeatureRequestEventKind
-		if evt.Debug {
+		if evt.debug {
 			kind = FeatureDebugEventKind
 		}
 		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
-		writeContextKind(&obj, evt.User.GetAnonymous())
-		if ef.config.InlineUsersInEvents || evt.Debug {
-			ef.userFilter.writeUser(obj.Name("user"), evt.User)
+		if evt.debug {
+			ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 		} else {
-			obj.Name("userKey").String(evt.User.GetKey())
+			writeContextKeys(&obj, &evt.Context.context)
 		}
 		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
 		evt.Value.WriteToJSONWriter(obj.Name("value"))
@@ -71,35 +75,22 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEve
 			evt.Reason.WriteToJSONWriter(obj.Name("reason"))
 		}
 
-	case CustomEvent:
+	case CustomEventData:
 		beginEventFields(&obj, CustomEventKind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		if !evt.Data.IsNull() {
 			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
-		writeContextKind(&obj, evt.User.GetAnonymous())
-		if ef.config.InlineUsersInEvents {
-			ef.userFilter.writeUser(obj.Name("user"), evt.User)
-		} else {
-			obj.Name("userKey").String(evt.User.GetKey())
-		}
+		writeContextKeys(&obj, &evt.Context.context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
-	case IdentifyEvent:
+	case IdentifyEventData:
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
-		obj.Name("key").String(evt.User.GetKey())
-		ef.userFilter.writeUser(obj.Name("user"), evt.User)
-
-	case AliasEvent:
-		beginEventFields(&obj, AliasEventKind, evt.CreationDate)
-		obj.Name("key").String(evt.CurrentKey)
-		obj.Name("contextKind").String(evt.CurrentKind)
-		obj.Name("previousKey").String(evt.PreviousKey)
-		obj.Name("previousContextKind").String(evt.PreviousKind)
+		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
-		ef.userFilter.writeUser(obj.Name("user"), evt.User)
+		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 	}
 
 	obj.End()
@@ -110,8 +101,18 @@ func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime
 	obj.Name("creationDate").Float64(float64(creationDate))
 }
 
-func writeContextKind(obj *jwriter.ObjectState, anonymous bool) {
-	obj.Maybe("contextKind", anonymous).String("anonymousUser")
+func writeContextKeys(obj *jwriter.ObjectState, c *ldcontext.Context) {
+	keysObj := obj.Name("contextKeys").Object()
+	if c.Multiple() {
+		for i := 0; i < c.MultiKindCount(); i++ {
+			if mc, ok := c.MultiKindByIndex(i); ok {
+				keysObj.Name(string(mc.Kind())).String(mc.Key())
+			}
+		}
+	} else {
+		keysObj.Name(string(c.Kind())).String(c.Key())
+	}
+	keysObj.End()
 }
 
 // Transforms the summary data into the format used for event sending.
@@ -122,63 +123,36 @@ func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eve
 	obj.Name("startDate").Float64(float64(snapshot.startDate))
 	obj.Name("endDate").Float64(float64(snapshot.endDate))
 
-	flagsObj := obj.Name("features").Object()
+	allFlagsObj := obj.Name("features").Object()
+	for flagKey, flagSummary := range snapshot.flags {
+		flagObj := allFlagsObj.Name(flagKey).Object()
 
-	// snapshot.counters contains composite keys in any order, part of which is the flag key; we want to group
-	// them together by flag key. The following multi-pass logic allows us to do this without using maps. It is
-	// based on the corresponding Java SDK logic in EventOutputFormatter.java.
-
-	unprocessedKeys := make([]counterKey, 0, 100)
-	// starting with a fixed capacity allows this slice to live on the stack unless it grows past that limit
-	for key := range snapshot.counters {
-		unprocessedKeys = append(unprocessedKeys, key)
-	}
-
-	for i, key := range unprocessedKeys {
-		if key.key == "" {
-			continue // we've already consumed this one when we saw the same flag key further up
-		}
-		// Now we've got a flag key that we haven't seen before
-		flagKey := key.key
-		firstValue := snapshot.counters[key]
-
-		flagObj := flagsObj.Name(flagKey).Object()
-
-		firstValue.flagDefault.WriteToJSONWriter(flagObj.Name("default"))
+		flagSummary.defaultValue.WriteToJSONWriter(flagObj.Name("default"))
 
 		countersArr := flagObj.Name("counters").Array()
-
-		// Iterate over the remainder of the list to find any more entries for the same flag key.
-		for j := i; j < len(unprocessedKeys); j++ {
-			var anotherKey counterKey
-			var anotherValue *counterValue
-			if j == i {
-				anotherKey = key
-				anotherValue = firstValue
-			} else {
-				anotherKey = unprocessedKeys[j]
-				if anotherKey.key != flagKey {
-					continue
-				}
-				anotherValue = snapshot.counters[anotherKey]
-				unprocessedKeys[j].key = "" // clear this one so we'll skip it in the next pass
-			}
-
+		for counterKey, counterValue := range flagSummary.counters {
 			counterObj := countersArr.Object()
-			counterObj.Maybe("variation", anotherKey.variation.IsDefined()).Int(anotherKey.variation.IntValue())
-			if anotherKey.version.IsDefined() {
-				counterObj.Name("version").Int(anotherKey.version.IntValue())
+			counterObj.Maybe("variation", counterKey.variation.IsDefined()).Int(counterKey.variation.IntValue())
+			if counterKey.version.IsDefined() {
+				counterObj.Name("version").Int(counterKey.version.IntValue())
 			} else {
 				counterObj.Name("unknown").Bool(true)
 			}
-			anotherValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
-			counterObj.Name("count").Int(anotherValue.count)
+			counterValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
+			counterObj.Name("count").Int(counterValue.count)
 			counterObj.End()
 		}
-
 		countersArr.End()
+
+		contextKindsArr := flagObj.Name("contextKinds").Array()
+		for kind := range flagSummary.contextKinds {
+			contextKindsArr.String(string(kind))
+		}
+		contextKindsArr.End()
+
 		flagObj.End()
 	}
-	flagsObj.End()
+	allFlagsObj.End()
+
 	obj.End()
 }

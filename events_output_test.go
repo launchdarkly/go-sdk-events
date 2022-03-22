@@ -1,241 +1,385 @@
 package ldevents
 
 import (
-	"sort"
+	"encoding/json"
 	"testing"
+
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldreason"
+	"github.com/launchdarkly/go-sdk-common/v3/lduser"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
+
+	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
 )
-
-const fakeTime = ldtime.UnixMillisecondTime(100000)
 
 var (
 	withoutReasons = NewEventFactory(false, fakeTimeFn)
 	withReasons    = NewEventFactory(true, fakeTimeFn)
 )
 
-func fakeTimeFn() ldtime.UnixMillisecondTime { return fakeTime }
+func withTestContextsAndConfigs(t *testing.T, action func(*testing.T, EventContext, EventsConfiguration)) {
+	singleCtx := Context(ldcontext.New("user-key"))
+	multiCtx := Context(ldcontext.NewMulti(ldcontext.New("user-key"), ldcontext.NewWithKind("org", "org-key")))
+
+	privateConfig := basicConfigWithoutPrivateAttrs()
+	privateConfig.AllAttributesPrivate = true
+
+	t.Run("single kind, no private attributes", func(t *testing.T) {
+		action(t, singleCtx, basicConfigWithoutPrivateAttrs())
+	})
+
+	t.Run("multi-kind, no private attributes", func(t *testing.T) {
+		action(t, multiCtx, basicConfigWithoutPrivateAttrs())
+	})
+
+	t.Run("single kind, with private attributes", func(t *testing.T) {
+		action(t, singleCtx, privateConfig)
+	})
+
+	t.Run("multi-kind, with private attributes", func(t *testing.T) {
+		action(t, multiCtx, privateConfig)
+	})
+}
 
 func TestEventOutputFullEvents(t *testing.T) {
-	user := User(lduser.NewUser("u"))
-	flag := flagEventPropertiesImpl{Key: "flagkey", Version: 100}
+	withTestContextsAndConfigs(t, func(t *testing.T, context EventContext, config EventsConfiguration) {
+		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
-	defaultFormatter := eventOutputFormatter{config: epDefaultConfig}
-	formatterWithInlineUsers := eventOutputFormatter{config: epDefaultConfig}
-	formatterWithInlineUsers.config.InlineUsersInEvents = true
+		formatter := eventOutputFormatter{
+			contextFormatter: newEventContextFormatter(config),
+			config:           config,
+		}
 
-	t.Run("feature", func(t *testing.T) {
-		event1 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-			ldvalue.String("dv"), "")
-		verifyEventOutput(t, defaultFormatter, event1,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event1,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"user":{"key":"u"},"variation":1,"value":"v","default":"dv"}`)
+		// In this test, we are assuming that the output of eventContextFormatter is correct with regard to
+		// private attributes; those details are covered in the tests for eventContextFormatter itself. We
+		// just want to verify here that eventOutputFormatter is actually *using* eventContextFormatter with
+		// the specified configuration.
+		contextJSON := contextJSON(context, config)
+		contextKeys := expectedContextKeys(context.context)
 
-		event1r := withReasons.NewEvalEvent(flag, user,
-			ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, ldreason.NewEvalReasonFallthrough()),
-			ldvalue.String("dv"), "")
-		verifyEventOutput(t, defaultFormatter, event1r,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv","reason":{"kind":"FALLTHROUGH"}}`)
+		t.Run("feature", func(t *testing.T) {
+			event1 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "")
+			verifyEventOutput(t, formatter, event1,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "feature",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"contextKeys":  contextKeys,
+					"variation":    1,
+					"value":        "v",
+					"default":      "dv",
+				}))
 
-		event2 := withoutReasons.NewEvalEvent(flag, user, ldreason.EvaluationDetail{Value: ldvalue.String("v")},
-			ldvalue.String("dv"), "")
-		event2.Variation = ldvalue.OptionalInt{}
-		verifyEventOutput(t, defaultFormatter, event2,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","value":"v","default":"dv"}`)
+			event1r := withReasons.NewEvaluationData(flag, context,
+				ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, ldreason.NewEvalReasonFallthrough()),
+				false, ldvalue.String("dv"), "")
+			verifyEventOutput(t, formatter, event1r,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "feature",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"contextKeys":  contextKeys,
+					"variation":    1,
+					"value":        "v",
+					"default":      "dv",
+					"reason":       json.RawMessage(`{"kind":"FALLTHROUGH"}`),
+				}))
 
-		event3 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-			ldvalue.String("dv"), "pre")
-		verifyEventOutput(t, defaultFormatter, event3,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","version":100,"userKey":"u","variation":1,"value":"v","default":"dv","prereqOf":"pre"}`)
+			event2 := withoutReasons.NewEvaluationData(flag, context, ldreason.EvaluationDetail{Value: ldvalue.String("v")},
+				false, ldvalue.String("dv"), "")
+			event2.Variation = ldvalue.OptionalInt{}
+			verifyEventOutput(t, formatter, event2,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "feature",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"contextKeys":  contextKeys,
+					"value":        "v",
+					"default":      "dv",
+				}))
 
-		event4 := withoutReasons.NewUnknownFlagEvent("flagkey", user,
-			ldvalue.String("dv"), ldreason.EvaluationReason{})
-		verifyEventOutput(t, defaultFormatter, event4,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","userKey":"u","value":"dv","default":"dv"}`)
+			event3 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "pre")
+			verifyEventOutput(t, formatter, event3,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "feature",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"contextKeys":  contextKeys,
+					"variation":    1,
+					"value":        "v",
+					"default":      "dv",
+					"prereqOf":     "pre",
+				}))
 
-		event5 := withoutReasons.NewUnknownFlagEvent("flagkey", User(lduser.NewAnonymousUser("u")),
-			ldvalue.String("dv"), ldreason.EvaluationReason{})
-		verifyEventOutput(t, defaultFormatter, event5,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","userKey":"u","contextKind":"anonymousUser","value":"dv","default":"dv"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event5,
-			`{"kind":"feature","creationDate":100000,"key":"flagkey","user":{"key":"u","anonymous":true},"contextKind":"anonymousUser","value":"dv","default":"dv"}`)
-	})
+			event4 := withoutReasons.NewUnknownFlagEvaluationData("flagkey", context,
+				ldvalue.String("dv"), ldreason.EvaluationReason{})
+			verifyEventOutput(t, formatter, event4,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "feature",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"contextKeys":  contextKeys,
+					"value":        "dv",
+					"default":      "dv",
+				}))
+		})
 
-	t.Run("debug", func(t *testing.T) {
-		event1 := withoutReasons.NewEvalEvent(flag, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-			ldvalue.String("dv"), "")
-		event1.Debug = true
-		verifyEventOutput(t, defaultFormatter, event1,
-			`{"kind":"debug","creationDate":100000,"key":"flagkey","version":100,"user":{"key":"u"},"variation":1,"value":"v","default":"dv"}`)
-	})
+		t.Run("debug", func(t *testing.T) {
+			event1 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "")
+			event1.debug = true
+			verifyEventOutput(t, formatter, event1,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "debug",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"context":      contextJSON,
+					"variation":    1,
+					"value":        "v",
+					"default":      "dv",
+				}))
+		})
 
-	t.Run("identify", func(t *testing.T) {
-		event := withoutReasons.NewIdentifyEvent(user)
-		verifyEventOutput(t, defaultFormatter, event,
-			`{"kind":"identify","creationDate":100000,"key":"u","user":{"key":"u"}}`)
-	})
+		t.Run("identify", func(t *testing.T) {
+			event := withoutReasons.NewIdentifyEventData(context)
+			verifyEventOutput(t, formatter, event,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "identify",
+					"creationDate": fakeTime,
+					"context":      contextJSON,
+				}))
+		})
 
-	t.Run("alias", func(t *testing.T) {
-		event1 := withoutReasons.NewAliasEvent("p", "user", "u", "user")
-		verifyEventOutput(t, defaultFormatter, event1,
-			`{"kind":"alias","creationDate":100000,"contextKind":"user","key":"u","previousContextKind":"user","previousKey":"p"}`)
+		t.Run("custom", func(t *testing.T) {
+			event1 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0)
+			verifyEventOutput(t, formatter, event1,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "custom",
+					"key":          "eventkey",
+					"creationDate": fakeTime,
+					"contextKeys":  contextKeys,
+				}))
 
-		event2 := withoutReasons.NewAliasEvent("p", "anonymousUser", "u", "anonymousUser")
-		verifyEventOutput(t, defaultFormatter, event2,
-			`{"kind":"alias","creationDate":100000,"contextKind":"anonymousUser","key":"u","previousContextKind":"anonymousUser","previousKey":"p"}`)
-	})
+			event2 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.String("d"), false, 0)
+			verifyEventOutput(t, formatter, event2,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "custom",
+					"key":          "eventkey",
+					"creationDate": fakeTime,
+					"contextKeys":  contextKeys,
+					"data":         "d",
+				}))
 
-	t.Run("custom", func(t *testing.T) {
-		event1 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.Null(), false, 0)
-		verifyEventOutput(t, defaultFormatter, event1,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event1,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","user":{"key":"u"}}`)
+			event3 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), true, 2.5)
+			verifyEventOutput(t, formatter, event3,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "custom",
+					"key":          "eventkey",
+					"creationDate": fakeTime,
+					"contextKeys":  contextKeys,
+					"metricValue":  2.5,
+				}))
+		})
 
-		event2 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.String("d"), false, 0)
-		verifyEventOutput(t, defaultFormatter, event2,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u","data":"d"}`)
+		t.Run("index", func(t *testing.T) {
+			event := indexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, Context: context}}
+			verifyEventOutput(t, formatter, event,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "index",
+					"creationDate": fakeTime,
+					"context":      contextJSON,
+				}))
+		})
 
-		event3 := withoutReasons.NewCustomEvent("eventkey", user, ldvalue.Null(), true, 2.5)
-		verifyEventOutput(t, defaultFormatter, event3,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u","metricValue":2.5}`)
-
-		event4 := withoutReasons.NewCustomEvent("eventkey", User(lduser.NewAnonymousUser("u")), ldvalue.Null(), false, 0)
-		verifyEventOutput(t, defaultFormatter, event4,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","userKey":"u","contextKind":"anonymousUser"}`)
-		verifyEventOutput(t, formatterWithInlineUsers, event4,
-			`{"kind":"custom","creationDate":100000,"key":"eventkey","user":{"key":"u","anonymous":true},"contextKind":"anonymousUser"}`)
-	})
-
-	t.Run("index", func(t *testing.T) {
-		event := indexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, User: user}}
-		verifyEventOutput(t, defaultFormatter, event,
-			`{"kind":"index","creationDate":100000,"user":{"key":"u"}}`)
+		t.Run("raw", func(t *testing.T) {
+			rawData := json.RawMessage(`{"kind":"alias","arbitrary":["we","don't","care","what's","in","here"]}`)
+			event := rawEvent{data: rawData}
+			verifyEventOutput(t, formatter, event, m.JSONEqual(rawData))
+		})
 	})
 }
 
 func TestEventOutputSummaryEvents(t *testing.T) {
-	user := User(lduser.NewUser("u"))
-	flag1v1 := flagEventPropertiesImpl{Key: "flag1", Version: 100}
-	flag1v2 := flagEventPropertiesImpl{Key: "flag1", Version: 200}
+	user := Context(lduser.NewUser("u"))
+	flag1v1 := FlagEventProperties{Key: "flag1", Version: 100}
+	flag1v2 := FlagEventProperties{Key: "flag1", Version: 200}
 	flag1Default := ldvalue.String("default1")
-	flag2 := flagEventPropertiesImpl{Key: "flag2", Version: 1}
+	flag2 := FlagEventProperties{Key: "flag2", Version: 1}
 	flag2Default := ldvalue.String("default2")
 
-	defaultFormatter := eventOutputFormatter{config: epDefaultConfig}
+	formatter := eventOutputFormatter{
+		contextFormatter: newEventContextFormatter(basicConfigWithoutPrivateAttrs()),
+		config:           basicConfigWithoutPrivateAttrs(),
+	}
 
 	t.Run("summary - single flag, single counter", func(t *testing.T) {
 		es1 := newEventSummarizer()
-		event1 := withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-			ldvalue.String("dv"), "")
+		event1 := withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			false, ldvalue.String("dv"), "")
 		es1.summarizeEvent(event1)
-		verifySummaryEventOutput(t, defaultFormatter, es1.snapshot(),
-			`{"kind":"summary","startDate":100000,"endDate":100000,"features":{"flag1":{"counters":[{"count":1,"value":"v","variation":1,"version":100}],"default":"dv"}}}`)
+		verifySummaryEventOutput(t, formatter, es1.snapshot(),
+			m.JSONEqual(map[string]interface{}{
+				"kind":      "summary",
+				"startDate": fakeTime,
+				"endDate":   fakeTime,
+				"features": map[string]interface{}{
+					"flag1": map[string]interface{}{
+						"counters":     json.RawMessage(`[{"count":1,"value":"v","variation":1,"version":100}]`),
+						"contextKinds": []string{"user"},
+						"default":      "dv",
+					},
+				},
+			}))
 
 		es2 := newEventSummarizer()
-		event2 := withoutReasons.NewEvalEvent(flag1v1, user, ldreason.EvaluationDetail{Value: ldvalue.String("dv")},
-			ldvalue.String("dv"), "")
+		event2 := withoutReasons.NewEvaluationData(flag1v1, user, ldreason.EvaluationDetail{Value: ldvalue.String("dv")},
+			false, ldvalue.String("dv"), "")
 		event2.Variation = ldvalue.OptionalInt{}
 		es2.summarizeEvent(event2)
-		verifySummaryEventOutput(t, defaultFormatter, es2.snapshot(),
-			`{"kind":"summary","startDate":100000,"endDate":100000,"features":{"flag1":{"counters":[{"count":1,"value":"dv","version":100}],"default":"dv"}}}`)
+		verifySummaryEventOutput(t, formatter, es2.snapshot(),
+			m.JSONEqual(map[string]interface{}{
+				"kind":      "summary",
+				"startDate": fakeTime,
+				"endDate":   fakeTime,
+				"features": map[string]interface{}{
+					"flag1": map[string]interface{}{
+						"counters":     json.RawMessage(`[{"count":1,"value":"dv","version":100}]`),
+						"contextKinds": []string{"user"},
+						"default":      "dv",
+					},
+				},
+			}))
 
 		es3 := newEventSummarizer()
-		event3 := withoutReasons.NewUnknownFlagEvent("flagkey", user,
+		event3 := withoutReasons.NewUnknownFlagEvaluationData("flagkey", user,
 			ldvalue.String("dv"), ldreason.EvaluationReason{})
 		es3.summarizeEvent(event3)
-		verifySummaryEventOutput(t, defaultFormatter, es3.snapshot(),
-			`{"kind":"summary","startDate":100000,"endDate":100000,"features":{"flagkey":{"counters":[{"count":1,"value":"dv","unknown":true}],"default":"dv"}}}`)
+		verifySummaryEventOutput(t, formatter, es3.snapshot(),
+			m.JSONEqual(map[string]interface{}{
+				"kind":      "summary",
+				"startDate": fakeTime,
+				"endDate":   fakeTime,
+				"features": map[string]interface{}{
+					"flagkey": map[string]interface{}{
+						"counters":     json.RawMessage(`[{"count":1,"value":"dv","unknown":true}]`),
+						"contextKinds": []string{"user"},
+						"default":      "dv",
+					},
+				},
+			}))
 	})
 
 	t.Run("summary - multiple counters", func(t *testing.T) {
 		es := newEventSummarizer()
-		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			flag1Default, ""))
-		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-			flag1Default, ""))
-		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			flag1Default, ""))
-		es.summarizeEvent(withoutReasons.NewEvalEvent(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			flag1Default, ""))
-		es.summarizeEvent(withoutReasons.NewEvalEvent(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-			flag2Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
+			false, flag2Default, ""))
 
-		bytes, count := defaultFormatter.makeOutputEvents(nil, es.snapshot())
+		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
 		require.Equal(t, 1, count)
-		outValue := ldvalue.Parse(bytes).GetByIndex(0)
-		require.NotEqual(t, ldvalue.Null(), outValue)
-		featuresObj := outValue.GetByKey("features")
-		assert.Equal(t, 2, featuresObj.Count())
 
-		flag1Obj := featuresObj.GetByKey("flag1")
-		assert.Equal(t, flag1Default, flag1Obj.GetByKey("default"))
-		flag1Counters := getArrayValues(flag1Obj.GetByKey("counters"))
-		assert.Len(t, flag1Counters, 3)
-		sort.Slice(flag1Counters, func(i, j int) bool {
-			iVers := flag1Counters[i].GetByKey("version").IntValue()
-			jVers := flag1Counters[j].GetByKey("version").IntValue()
-			if iVers != jVers {
-				return iVers < jVers
-			}
-			iVar := flag1Counters[i].GetByKey("variation").IntValue()
-			jVar := flag1Counters[j].GetByKey("variation").IntValue()
-			return iVar < jVar
-		})
-		assert.Equal(t, ldvalue.Parse([]byte(`{"version":100,"variation":1,"value":"a","count":2}`)),
-			flag1Counters[0])
-		assert.Equal(t, ldvalue.Parse([]byte(`{"version":100,"variation":2,"value":"b","count":1}`)),
-			flag1Counters[1])
-		assert.Equal(t, ldvalue.Parse([]byte(`{"version":200,"variation":1,"value":"a","count":1}`)),
-			flag1Counters[2])
+		// Using a nested matcher expression here, rather than an equality assertion on the whole JSON object,
+		// because the ordering of array items in "counters" is indeterminate so we need m.ItemsInAnyOrder().
+		m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(
+			m.MapOf(
+				m.KV("kind", m.Equal("summary")),
+				m.KV("startDate", m.Not(m.BeNil())),
+				m.KV("endDate", m.Not(m.BeNil())),
+				m.KV("features", m.MapOf(
+					m.KV("flag1", m.MapOf(
+						m.KV("default", m.JSONEqual(flag1Default)),
+						m.KV("counters", m.ItemsInAnyOrder(
+							m.JSONStrEqual(`{"version":100,"variation":1,"value":"a","count":2}`),
+							m.JSONStrEqual(`{"version":100,"variation":2,"value":"b","count":1}`),
+							m.JSONStrEqual(`{"version":200,"variation":1,"value":"a","count":1}`),
+						)),
+						m.KV("contextKinds", m.Items(m.Equal("user"))),
+					)),
+					m.KV("flag2", m.MapOf(
+						m.KV("default", m.JSONEqual(flag2Default)),
+						m.KV("counters", m.ItemsInAnyOrder(
+							m.JSONStrEqual(`{"version":1,"variation":3,"value":"c","count":1}`),
+						)),
+						m.KV("contextKinds", m.Items(m.Equal("user"))),
+					)),
+				)),
+			),
+		)))
+	})
 
-		flag2Obj := featuresObj.GetByKey("flag2")
-		assert.Equal(t, flag2Default, flag2Obj.GetByKey("default"))
-		flag2Counters := getArrayValues(flag2Obj.GetByKey("counters"))
-		assert.Len(t, flag2Counters, 1)
-		assert.Equal(t, ldvalue.Parse([]byte(`{"version":1,"variation":3,"value":"c","count":1}`)),
-			flag2Counters[0])
+	t.Run("summary with multiple context kinds", func(t *testing.T) {
+		context1, context2, context3 := ldcontext.New("userkey1"), ldcontext.New("userkey2"), ldcontext.NewWithKind("org", "orgkey")
+
+		es := newEventSummarizer()
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, Context(context2), ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, Context(context3), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v2, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
+			false, flag1Default, ""))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag2, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
+			false, flag2Default, ""))
+
+		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
+		require.Equal(t, 1, count)
+
+		m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(
+			m.MapOf(
+				m.KV("kind", m.Equal("summary")),
+				m.KV("startDate", m.Not(m.BeNil())),
+				m.KV("endDate", m.Not(m.BeNil())),
+				m.KV("features", m.MapOf(
+					m.KV("flag1", m.MapOf(
+						m.KV("default", m.JSONEqual(flag1Default)),
+						m.KV("counters", m.Length().Should(m.Equal(3))),
+						m.KV("contextKinds", m.ItemsInAnyOrder(m.Equal("user"), m.Equal("org"))),
+					)),
+					m.KV("flag2", m.MapOf(
+						m.KV("default", m.JSONEqual(flag2Default)),
+						m.KV("counters", m.Length().Should(m.Equal(1))),
+						m.KV("contextKinds", m.Items(m.Equal("user"))),
+					)),
+				)),
+			),
+		)))
 	})
 
 	t.Run("empty payload", func(t *testing.T) {
-		bytes, count := defaultFormatter.makeOutputEvents([]commonEvent{}, eventSummary{})
+		bytes, count := formatter.makeOutputEvents([]anyEventOutput{}, eventSummary{})
 		assert.Nil(t, bytes)
 		assert.Equal(t, 0, count)
 	})
 }
 
-func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event commonEvent, expectedJSON string) {
-	expectedValue := ldvalue.Parse([]byte(expectedJSON))
-	bytes, count := formatter.makeOutputEvents([]commonEvent{event}, eventSummary{})
+func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event anyEventInput, jsonMatcher m.Matcher) {
+	t.Helper()
+	bytes, count := formatter.makeOutputEvents([]anyEventOutput{event}, eventSummary{})
 	require.Equal(t, 1, count)
-	outValue := ldvalue.Parse(bytes)
-	require.Equal(t, outValue.Count(), 1)
-	outEvent := outValue.GetByIndex(0)
-	assert.Equal(t, expectedValue, outEvent, "expected JSON: %s, actual JSON: %s", expectedJSON, outEvent)
+	m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(jsonMatcher)))
 }
 
-func verifySummaryEventOutput(t *testing.T, formatter eventOutputFormatter, summary eventSummary, expectedJSON string) {
-	expectedValue := ldvalue.Parse([]byte(expectedJSON))
+func verifySummaryEventOutput(t *testing.T, formatter eventOutputFormatter, summary eventSummary, jsonMatcher m.Matcher) {
+	t.Helper()
 	bytes, count := formatter.makeOutputEvents(nil, summary)
 	require.Equal(t, 1, count)
-	outValue := ldvalue.Parse(bytes)
-	require.Equal(t, outValue.Count(), 1)
-	outEvent := outValue.GetByIndex(0)
-	assert.Equal(t, expectedValue, outEvent, "expected JSON: %s, actual JSON: %s", expectedJSON, outEvent)
-}
-
-func getArrayValues(v ldvalue.Value) []ldvalue.Value {
-	s := make([]ldvalue.Value, 0, v.Count())
-	v.Enumerate(func(i int, k string, vv ldvalue.Value) bool {
-		s = append(s, vv)
-		return true
-	})
-	return s
+	m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(jsonMatcher)))
 }

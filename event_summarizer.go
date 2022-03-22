@@ -1,8 +1,9 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 // Manages the state of summarizable information for the EventProcessor, including the
@@ -14,21 +15,25 @@ type eventSummarizer struct {
 }
 
 type eventSummary struct {
-	counters  map[counterKey]*counterValue
+	flags     map[string]flagSummary
 	startDate ldtime.UnixMillisecondTime
 	endDate   ldtime.UnixMillisecondTime
 }
 
+type flagSummary struct {
+	counters     map[counterKey]*counterValue
+	contextKinds map[ldcontext.Kind]struct{}
+	defaultValue ldvalue.Value
+}
+
 type counterKey struct {
-	key       string
 	variation ldvalue.OptionalInt
 	version   ldvalue.OptionalInt
 }
 
 type counterValue struct {
-	count       int
-	flagValue   ldvalue.Value
-	flagDefault ldvalue.Value
+	count     int
+	flagValue ldvalue.Value
 }
 
 func newEventSummarizer() eventSummarizer {
@@ -37,25 +42,47 @@ func newEventSummarizer() eventSummarizer {
 
 func newEventSummary() eventSummary {
 	return eventSummary{
-		counters: make(map[counterKey]*counterValue),
+		flags: make(map[string]flagSummary),
 	}
 }
 
-// Adds this event to our counters.
-func (s *eventSummarizer) summarizeEvent(fe FeatureRequestEvent) {
-	key := counterKey{key: fe.Key, variation: fe.Variation, version: fe.Version}
+func (s eventSummary) hasCounters() bool {
+	return len(s.flags) != 0
+}
 
-	if value, ok := s.eventsState.counters[key]; ok {
+// Adds this event to our counters.
+func (s *eventSummarizer) summarizeEvent(ed EvaluationData) {
+	flag, ok := s.eventsState.flags[ed.Key]
+	if !ok {
+		flag = flagSummary{
+			counters:     make(map[counterKey]*counterValue),
+			contextKinds: make(map[ldcontext.Kind]struct{}),
+			defaultValue: ed.Default,
+		}
+		s.eventsState.flags[ed.Key] = flag
+	}
+
+	counterKey := counterKey{variation: ed.Variation, version: ed.Version}
+	if value, ok := flag.counters[counterKey]; ok {
 		value.count++
 	} else {
-		s.eventsState.counters[key] = &counterValue{
-			count:       1,
-			flagValue:   fe.Value,
-			flagDefault: fe.Default,
+		flag.counters[counterKey] = &counterValue{
+			count:     1,
+			flagValue: ed.Value,
 		}
 	}
 
-	creationDate := fe.CreationDate
+	if ed.Context.context.Multiple() {
+		for i := 0; i < ed.Context.context.MultiKindCount(); i++ {
+			if mc, ok := ed.Context.context.MultiKindByIndex(i); ok {
+				flag.contextKinds[mc.Kind()] = struct{}{}
+			}
+		}
+	} else {
+		flag.contextKinds[ed.Context.context.Kind()] = struct{}{}
+	}
+
+	creationDate := ed.CreationDate
 	if s.eventsState.startDate == 0 || creationDate < s.eventsState.startDate {
 		s.eventsState.startDate = creationDate
 	}

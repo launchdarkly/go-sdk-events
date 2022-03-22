@@ -1,25 +1,27 @@
 package ldevents
 
 import (
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldreason"
-	"gopkg.in/launchdarkly/go-sdk-common.v2/ldtime"
+	"encoding/json"
+
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
 
 // EventProcessor defines the interface for dispatching analytics events.
 type EventProcessor interface {
-	// RecordFeatureRequestEvent records a FeatureRequestEvent asynchronously. Depending on the feature
+	// RecordEvaluation records evaluation information asynchronously. Depending on the feature
 	// flag properties and event properties, this may be transmitted to the events service as an
 	// individual event, or may only be added into summary data.
-	RecordFeatureRequestEvent(FeatureRequestEvent)
+	RecordEvaluation(EvaluationData)
 
-	// RecordIdentifyEvent records an IdentifyEvent asynchronously.
-	RecordIdentifyEvent(IdentifyEvent)
+	// RecordIdentifyEvent records an identify event asynchronously.
+	RecordIdentifyEvent(IdentifyEventData)
 
-	// RecordCustomEvent records a CustomEvent asynchronously.
-	RecordCustomEvent(CustomEvent)
+	// RecordCustomEvent records a custom event asynchronously.
+	RecordCustomEvent(CustomEventData)
 
-	// RecordAliasEvent records an AliasEvent asynchronously.
-	RecordAliasEvent(AliasEvent)
+	// RecordRawEvent adds an event to the output buffer that is not parsed or transformed in any way.
+	// This is used by the Relay Proxy when forwarding events.
+	RecordRawEvent(data json.RawMessage)
 
 	// Flush specifies that any buffered events should be sent as soon as possible, rather than waiting
 	// for the next flush interval. This method is asynchronous, so events still may not be sent
@@ -56,29 +58,4 @@ type EventSenderResult struct {
 	MustShutDown bool
 	// TimeFromServer is the last known date/time reported by the server, if available, otherwise zero.
 	TimeFromServer ldtime.UnixMillisecondTime
-}
-
-// FlagEventProperties is an interface that provides the basic information about a feature flag that the events
-// package needs, without having a specific dependency on the server-side data model. An implementation of this
-// interface for server-side feature flags is provided in go-server-sdk-evaluation; if we ever create a
-// client-side Go SDK, that will have its own implementation.
-type FlagEventProperties interface {
-	// GetKey returns the feature flag key.
-	GetKey() string
-	// GetVersion returns the feature flag version.
-	GetVersion() int
-	// IsFullEventTrackingEnabled returns true if the flag has been configured to always generate detailed event data.
-	IsFullEventTrackingEnabled() bool
-	// GetDebugEventsUntilDate returns zero normally, but if event debugging has been temporarily enabled for the flag,
-	// it returns the time at which debugging mode should expire.
-	GetDebugEventsUntilDate() ldtime.UnixMillisecondTime
-	// IsExperimentationEnabled returns true if, based on the EvaluationReason returned by the flag evaluation,
-	// an event for that evaluation should have full tracking enabled and always report the reason even if the
-	// application didn't explicitly request this. For instance, this is true if a rule was matched that had
-	// tracking enabled for that specific rule.
-	//
-	// This differs from IsFullEventTrackingEnabled() in that it is dependent on the result of a specific
-	// evaluation; also, IsFullEventTrackingEnabled() being true does not imply that the event should always
-	// contain a reason, whereas IsExperimentationEnabled() being true does force the reason to be included.
-	IsExperimentationEnabled(reason ldreason.EvaluationReason) bool
 }

@@ -1,13 +1,21 @@
+version: 2
+
 repo:
   public: go-sdk-events
   private: go-sdk-events-private
 
-releasableBranches:
-  - name: v1
+jobs:
+  - docker:
+      image: golang:1.16-buster
+    template:
+      name: go
 
-template:
-  name: go
+branches:
+  - name: v2
+    description: 2.x - for Go SDK 6+
+  - name: v1
+    description: 1.x - for Go SDK 5+
 
 publications:
-  - url: https://pkg.go.dev/github.com/launchdarkly/go-sdk-events
+  - url: https://godoc.org/github.com/launchdarkly/go-sdk-events/v2
     description: documentation
