@@ -121,7 +121,7 @@ func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
 }
 
 func TestEventContextFormatterOutput(t *testing.T) {
-	objectValue := ldvalue.ObjectBuild().Set("city", ldvalue.String("SF")).Set("state", ldvalue.String("CA")).Build()
+	objectValue := ldvalue.ObjectBuild().SetString("city", "SF").SetString("state", "CA").Build()
 
 	type params struct {
 		desc         string

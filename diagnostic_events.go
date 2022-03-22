@@ -42,8 +42,8 @@ func NewDiagnosticID(sdkKey string) ldvalue.Value {
 		sdkKeySuffix = sdkKey
 	}
 	return ldvalue.ObjectBuild().
-		Set("diagnosticId", ldvalue.String(uuid.String())).
-		Set("sdkKeySuffix", ldvalue.String(sdkKeySuffix)).
+		SetString("diagnosticId", uuid.String()).
+		SetString("sdkKeySuffix", sdkKeySuffix).
 		Build()
 }
 
@@ -89,16 +89,16 @@ func (m *DiagnosticsManager) CreateInitEvent() ldvalue.Value {
 	// - osArch: in Go, GOARCH is set at compile time, not at runtime (unlike GOOS, whiich is runtime).
 	// - osVersion: Go provides no portable way to get this property.
 	platformData := ldvalue.ObjectBuild().
-		Set("name", ldvalue.String("Go")).
-		Set("goVersion", ldvalue.String(runtime.Version())).
-		Set("osName", ldvalue.String(normalizeOSName(runtime.GOOS))).
-		Set("osArch", ldvalue.String(runtime.GOARCH)).
+		SetString("name", "Go").
+		SetString("goVersion", runtime.Version()).
+		SetString("osName", normalizeOSName(runtime.GOOS)).
+		SetString("osArch", runtime.GOARCH).
 		Build()
 		// osVersion is not available, see above
 	return ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("diagnostic-init")).
+		SetString("kind", "diagnostic-init").
 		Set("id", m.id).
-		Set("creationDate", ldvalue.Float64(float64(m.startTime))).
+		SetFloat64("creationDate", float64(m.startTime)).
 		Set("sdk", m.sdkData).
 		Set("configuration", m.configData).
 		Set("platform", platformData).
@@ -136,19 +136,19 @@ func (m *DiagnosticsManager) CreateStatsEventAndReset(
 	streamInitsBuilder := ldvalue.ArrayBuildWithCapacity(len(m.streamInits))
 	for _, si := range m.streamInits {
 		streamInitsBuilder.Add(ldvalue.ObjectBuild().
-			Set("timestamp", ldvalue.Float64(float64(si.timestamp))).
-			Set("failed", ldvalue.Bool(si.failed)).
-			Set("durationMillis", ldvalue.Float64(float64(si.durationMillis))).
+			SetFloat64("timestamp", float64(si.timestamp)).
+			SetBool("failed", si.failed).
+			SetFloat64("durationMillis", float64(si.durationMillis)).
 			Build())
 	}
 	event := ldvalue.ObjectBuild().
-		Set("kind", ldvalue.String("diagnostic")).
+		SetString("kind", "diagnostic").
 		Set("id", m.id).
-		Set("creationDate", ldvalue.Float64(float64(timestamp))).
-		Set("dataSinceDate", ldvalue.Float64(float64(m.dataSinceTime))).
-		Set("droppedEvents", ldvalue.Int(droppedEvents)).
-		Set("deduplicatedUsers", ldvalue.Int(deduplicatedUsers)).
-		Set("eventsInLastBatch", ldvalue.Int(eventsInLastBatch)).
+		SetFloat64("creationDate", float64(timestamp)).
+		SetFloat64("dataSinceDate", float64(m.dataSinceTime)).
+		SetInt("droppedEvents", droppedEvents).
+		SetInt("deduplicatedUsers", deduplicatedUsers).
+		SetInt("eventsInLastBatch", eventsInLastBatch).
 		Set("streamInits", streamInitsBuilder.Build()).
 		Build()
 	m.streamInits = nil
