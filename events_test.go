@@ -1,7 +1,6 @@
 package ldevents
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
@@ -126,7 +125,7 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
-		assert.Equal(t, expected.BaseEvent.CreationDate, event1.GetCreationDate())
+		assert.Equal(t, expected.BaseEvent.CreationDate, event1.CreationDate)
 
 		event2 := withReasons.NewUnknownFlagEvaluationData(expected.Key, context, expected.Default, expected.Reason)
 		assert.Equal(t, expected, event2)
@@ -146,7 +145,7 @@ func TestEventFactory(t *testing.T) {
 
 		event := withoutReasons.NewCustomEventData(expected.Key, context, expected.Data, true, expected.MetricValue)
 		assert.Equal(t, expected, event)
-		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
+		assert.Equal(t, expected.BaseEvent.CreationDate, event.CreationDate)
 	})
 
 	t.Run("NewIdentifyEvent", func(t *testing.T) {
@@ -159,27 +158,6 @@ func TestEventFactory(t *testing.T) {
 
 		event := withoutReasons.NewIdentifyEventData(context)
 		assert.Equal(t, expected, event)
-		assert.Equal(t, expected.BaseEvent.CreationDate, event.GetCreationDate())
-	})
-}
-
-func TestPropertiesOfEventTypesNotFromFactory(t *testing.T) {
-	fakeTime := ldtime.UnixMillisecondTime(100000)
-	context := Context(ldcontext.New("key"))
-
-	t.Run("indexEvent", func(t *testing.T) {
-		ie := indexEvent{
-			BaseEvent: BaseEvent{
-				CreationDate: fakeTime,
-				Context:      context,
-			},
-		}
-		assert.Equal(t, ie.BaseEvent, ie.GetBase())
-		assert.Equal(t, ie.BaseEvent.CreationDate, ie.GetCreationDate())
-	})
-
-	t.Run("rawEvent", func(t *testing.T) {
-		re := rawEvent{json.RawMessage("{}")}
-		assert.Equal(t, ldtime.UnixMillisecondTime(0), re.GetCreationDate())
+		assert.Equal(t, expected.BaseEvent.CreationDate, event.CreationDate)
 	})
 }

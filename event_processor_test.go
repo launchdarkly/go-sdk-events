@@ -55,25 +55,28 @@ func withAndWithoutPrivateAttrs(t *testing.T, action func(*testing.T, EventsConf
 
 func withFeatureEventOrCustomEvent(
 	t *testing.T,
-	action func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (Event, []m.Matcher), finalEventMatchers []m.Matcher),
+	action func(
+		t *testing.T,
+		sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher),
+		finalEventMatchers []m.Matcher),
 ) {
 	t.Run("from feature event", func(t *testing.T) {
 		flag := FlagEventProperties{Key: "flagkey", Version: 11}
 		action(t,
-			func(ep EventProcessor, context EventContext) (Event, []m.Matcher) {
+			func(ep EventProcessor, context EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
 				fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 				ep.RecordEvaluation(fe)
-				return fe, nil
+				return fe, fe.CreationDate, nil
 			},
 			[]m.Matcher{anySummaryEvent()})
 	})
 
 	t.Run("from custom event", func(t *testing.T) {
 		action(t,
-			func(ep EventProcessor, context EventContext) (Event, []m.Matcher) {
+			func(ep EventProcessor, context EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
 				ce := defaultEventFactory.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0)
 				ep.RecordCustomEvent(ce)
-				return ce, []m.Matcher{anyCustomEvent()}
+				return ce, ce.CreationDate, []m.Matcher{anyCustomEvent()}
 			},
 			nil)
 	})
@@ -140,20 +143,20 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 
 func TestIndexEventProperties(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
-		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (Event, []m.Matcher), finalEventMatchers []m.Matcher) {
+		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
 			withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 				ep, es := createEventProcessorAndSender(config)
 				defer ep.Close()
 
 				context := basicContext()
 
-				event, allEventMatchers := sendEventFn(ep, context)
+				_, creationDate, allEventMatchers := sendEventFn(ep, context)
 				ep.Flush()
 
 				allEventMatchers = append(allEventMatchers,
 					m.JSONEqual(map[string]interface{}{
 						"kind":         "index",
-						"creationDate": event.GetBase().CreationDate,
+						"creationDate": creationDate,
 						"context":      contextJSON(context, config),
 					}))
 				allEventMatchers = append(allEventMatchers, finalEventMatchers...)
@@ -165,22 +168,22 @@ func TestIndexEventProperties(t *testing.T) {
 
 func TestIndexEventContextKeysAreDeduplicatedForSameKind(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
-		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (Event, []m.Matcher), finalEventMatchers []m.Matcher) {
+		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
 			withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 				ep, es := createEventProcessorAndSender(config)
 				defer ep.Close()
 
 				context := Context(ldcontext.New("my-key"))
 
-				event1, allEventMatchers := sendEventFn(ep, context)
-				_, moreMatchers := sendEventFn(ep, context)
+				_, creationDate, allEventMatchers := sendEventFn(ep, context)
+				_, _, moreMatchers := sendEventFn(ep, context)
 				allEventMatchers = append(allEventMatchers, moreMatchers...)
 				ep.Flush()
 
 				allEventMatchers = append(allEventMatchers,
 					m.JSONEqual(map[string]interface{}{
 						"kind":         "index",
-						"creationDate": event1.GetBase().CreationDate,
+						"creationDate": creationDate,
 						"context":      contextJSON(context, config),
 					}))
 				allEventMatchers = append(allEventMatchers, finalEventMatchers...)
@@ -192,7 +195,7 @@ func TestIndexEventContextKeysAreDeduplicatedForSameKind(t *testing.T) {
 
 func TestIndexEventContextKeysAreDeduplicatedSeparatelyForDifferentKinds(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
-		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (Event, []m.Matcher), finalEventMatchers []m.Matcher) {
+		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
 			withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 				ep, es := createEventProcessorAndSender(config)
 				defer ep.Close()
@@ -202,27 +205,27 @@ func TestIndexEventContextKeysAreDeduplicatedSeparatelyForDifferentKinds(t *test
 				context2 := Context(ldcontext.NewWithKind("org", key))
 				context3 := Context(ldcontext.NewMulti(ldcontext.New(key)))
 
-				event1, allEventMatchers := sendEventFn(ep, context1)
-				event2, moreMatchers := sendEventFn(ep, context2)
+				_, creationDate1, allEventMatchers := sendEventFn(ep, context1)
+				_, creationDate2, moreMatchers := sendEventFn(ep, context2)
 				allEventMatchers = append(allEventMatchers, moreMatchers...)
-				event3, moreMatchers := sendEventFn(ep, context3)
+				_, creationDate3, moreMatchers := sendEventFn(ep, context3)
 				allEventMatchers = append(allEventMatchers, moreMatchers...)
 				ep.Flush()
 
 				allEventMatchers = append(allEventMatchers,
 					m.JSONEqual(map[string]interface{}{
 						"kind":         "index",
-						"creationDate": event1.GetBase().CreationDate,
+						"creationDate": creationDate1,
 						"context":      contextJSON(context1, config),
 					}),
 					m.JSONEqual(map[string]interface{}{
 						"kind":         "index",
-						"creationDate": event2.GetBase().CreationDate,
+						"creationDate": creationDate2,
 						"context":      contextJSON(context2, config),
 					}),
 					m.JSONEqual(map[string]interface{}{
 						"kind":         "index",
-						"creationDate": event3.GetBase().CreationDate,
+						"creationDate": creationDate3,
 						"context":      contextJSON(context3, config),
 					}))
 				allEventMatchers = append(allEventMatchers, finalEventMatchers...)

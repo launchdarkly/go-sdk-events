@@ -74,7 +74,7 @@ func matchFeatureOrDebugEvent(sourceEvent EvaluationData, flag FlagEventProperti
 	props := map[string]interface{}{
 		"kind":         "feature",
 		"key":          flag.Key,
-		"creationDate": sourceEvent.GetBase().CreationDate,
+		"creationDate": sourceEvent.CreationDate,
 		"version":      flag.Version,
 		"value":        sourceEvent.Value,
 		"default":      nil,

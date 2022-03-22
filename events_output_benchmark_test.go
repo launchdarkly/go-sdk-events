@@ -37,7 +37,7 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 	}
 }
 
-func makeBasicEvents() []commonEvent {
+func makeBasicEvents() []anyEventOutput {
 	baseEvent := BaseEvent{
 		CreationDate: ldtime.UnixMillisNow(),
 		Context: Context(lduser.NewUserBuilder("user-key").
@@ -46,7 +46,7 @@ func makeBasicEvents() []commonEvent {
 			Custom("custom-attr", ldvalue.Bool(true)).
 			Build()),
 	}
-	return []commonEvent{
+	return []anyEventOutput{
 		EvaluationData{
 			BaseEvent: baseEvent,
 			Key:       "flag1",

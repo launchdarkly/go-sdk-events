@@ -5,7 +5,7 @@ import (
 )
 
 type eventsOutbox struct {
-	events           []commonEvent
+	events           []anyEventOutput
 	summarizer       eventSummarizer
 	capacity         int
 	capacityExceeded bool
@@ -15,14 +15,14 @@ type eventsOutbox struct {
 
 func newEventsOutbox(capacity int, loggers ldlog.Loggers) *eventsOutbox {
 	return &eventsOutbox{
-		events:     make([]commonEvent, 0, capacity),
+		events:     make([]anyEventOutput, 0, capacity),
 		summarizer: newEventSummarizer(),
 		capacity:   capacity,
 		loggers:    loggers,
 	}
 }
 
-func (b *eventsOutbox) addEvent(event commonEvent) {
+func (b *eventsOutbox) addEvent(event anyEventInput) {
 	if len(b.events) >= b.capacity {
 		if !b.capacityExceeded {
 			b.capacityExceeded = true
@@ -40,9 +40,9 @@ func (b *eventsOutbox) addToSummary(ed EvaluationData) {
 }
 
 func (b *eventsOutbox) getPayload() flushPayload {
-	var copied []commonEvent
+	var copied []anyEventOutput
 	if len(b.events) > 0 {
-		copied = make([]commonEvent, len(b.events))
+		copied = make([]anyEventOutput, len(b.events))
 		copy(copied, b.events)
 	}
 	return flushPayload{

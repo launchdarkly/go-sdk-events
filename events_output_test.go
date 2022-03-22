@@ -364,15 +364,15 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	})
 
 	t.Run("empty payload", func(t *testing.T) {
-		bytes, count := formatter.makeOutputEvents([]commonEvent{}, eventSummary{})
+		bytes, count := formatter.makeOutputEvents([]anyEventOutput{}, eventSummary{})
 		assert.Nil(t, bytes)
 		assert.Equal(t, 0, count)
 	})
 }
 
-func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event commonEvent, jsonMatcher m.Matcher) {
+func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event anyEventInput, jsonMatcher m.Matcher) {
 	t.Helper()
-	bytes, count := formatter.makeOutputEvents([]commonEvent{event}, eventSummary{})
+	bytes, count := formatter.makeOutputEvents([]anyEventOutput{event}, eventSummary{})
 	require.Equal(t, 1, count)
 	m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(jsonMatcher)))
 }

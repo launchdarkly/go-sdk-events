@@ -24,7 +24,7 @@ type eventOutputFormatter struct {
 	config           EventsConfiguration
 }
 
-func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary eventSummary) ([]byte, int) {
+func (ef eventOutputFormatter) makeOutputEvents(events []anyEventOutput, summary eventSummary) ([]byte, int) {
 	n := len(events)
 
 	w := jwriter.NewWriter()
@@ -45,7 +45,7 @@ func (ef eventOutputFormatter) makeOutputEvents(events []commonEvent, summary ev
 	return nil, 0
 }
 
-func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt commonEvent) {
+func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventOutput) {
 	if raw, ok := evt.(rawEvent); ok {
 		w.Raw(raw.data)
 		return
