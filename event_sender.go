@@ -30,6 +30,7 @@ type EventSenderConfiguration struct {
 	// BaseURI is the base URI to which the event endpoint paths will be added.
 	BaseURI string
 	// BaseHeaders contains any headers that should be added to the HTTP request, other than the schema version.
+	// The event delivery logic will never modify this map; it will clone it if necessary.
 	BaseHeaders func() http.Header
 	// SchemaVersion specifies the value for the X-LaunchDarkly-Event-Schema header, or 0 to use the latest version.
 	SchemaVersion int
