@@ -108,13 +108,13 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 
 	obj.Name(ldattr.KeyAttr).String(c.Key())
 
-	optionalAttrNames := make([]string, 0, 20) // arbitrary capacity, expanded if necessary by GetOptionalAttributeNames
+	optionalAttrNames := make([]string, 0, 50) // arbitrary capacity, expanded if necessary by GetOptionalAttributeNames
 	redactedAttrs := make([]string, 0, 20)
 
 	optionalAttrNames = c.GetOptionalAttributeNames(optionalAttrNames)
 
 	for _, key := range optionalAttrNames {
-		if value, ok := c.GetValue(key); ok {
+		if value := c.GetValue(key); value.IsDefined() {
 			if f.allAttributesPrivate {
 				// If allAttributesPrivate is true, then there's no complex filtering or recursing to be done: all of
 				// these values are by definition private, so just add their names to the redacted list.
@@ -211,11 +211,13 @@ func (f *eventContextFormatter) writeFilteredAttribute(
 		return                     // outcome 2
 	}
 	subObj := w.Object() // writes the opening brace for the output object
-	value.Enumerate(func(index int, subKey string, subValue ldvalue.Value) bool {
+
+	objectKeys := make([]string, 0, 50) // arbitrary capacity, expanded if necessary by value.Keys()
+	for _, subKey := range value.Keys(objectKeys) {
+		subValue := value.GetByKey(subKey)
 		// recurse to write or not write each property - outcome 3
 		f.writeFilteredAttribute(w, c, &subObj, path, subKey, subValue, redactedAttrs)
-		return true // true here just means "keep enumerating properties"
-	})
+	}
 	subObj.End() // writes the closing brace for the output object
 }
 

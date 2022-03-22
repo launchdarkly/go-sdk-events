@@ -43,7 +43,7 @@ func TestDiagnosticInitEventBaseProperties(t *testing.T) {
 
 func TestDiagnosticInitEventConfigData(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
-	configData := ldvalue.ObjectBuild().Set("things", ldvalue.String("stuff")).Build()
+	configData := ldvalue.ObjectBuild().SetString("things", "stuff").Build()
 	dm := NewDiagnosticsManager(id, configData, ldvalue.Null(), time.Now(), nil)
 	event := dm.CreateInitEvent()
 
@@ -52,7 +52,7 @@ func TestDiagnosticInitEventConfigData(t *testing.T) {
 
 func TestDiagnosticInitEventSDKData(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
-	sdkData := ldvalue.ObjectBuild().Set("name", ldvalue.String("my-sdk")).Build()
+	sdkData := ldvalue.ObjectBuild().SetString("name", "my-sdk").Build()
 	dm := NewDiagnosticsManager(id, ldvalue.Null(), sdkData, time.Now(), nil)
 	event := dm.CreateInitEvent()
 

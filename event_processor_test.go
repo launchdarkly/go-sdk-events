@@ -420,7 +420,7 @@ func TestCustomEventProperties(t *testing.T) {
 	defer ep.Close()
 
 	context := basicContext()
-	data := ldvalue.ObjectBuild().Set("thing", ldvalue.String("stuff")).Build()
+	data := ldvalue.ObjectBuild().SetString("thing", "stuff").Build()
 	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, false, 0)
 	ep.RecordCustomEvent(ce)
 	ep.Flush()
@@ -445,7 +445,7 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 	defer ep.Close()
 
 	context := basicContext()
-	data := ldvalue.ObjectBuild().Set("thing", ldvalue.String("stuff")).Build()
+	data := ldvalue.ObjectBuild().SetString("thing", "stuff").Build()
 	metric := float64(2.5)
 	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, true, metric)
 	ep.RecordCustomEvent(ce)
