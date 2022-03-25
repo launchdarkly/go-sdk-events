@@ -3,6 +3,7 @@ package ldevents
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -30,22 +31,6 @@ func (ei errorInfo) String() string {
 		return fmt.Sprintf("error %d", ei.status)
 	}
 	return "network error"
-}
-
-func TestNewDefaultEventSender(t *testing.T) {
-	client := *http.DefaultClient
-	client.Timeout = time.Hour
-	headers := make(http.Header)
-	headers.Set("key", "value")
-
-	es := NewDefaultEventSender(&client, fakeEventsURI, fakeDiagnosticURI, headers, ldlog.NewDisabledLoggers())
-	des := es.(*defaultEventSender)
-	assert.NotNil(t, des.httpClient)
-	assert.Equal(t, client, *des.httpClient)
-	assert.Equal(t, fakeEventsURI, des.eventsURI)
-	assert.Equal(t, fakeDiagnosticURI, des.diagnosticURI)
-	assert.Equal(t, headers, des.headers)
-	assert.Equal(t, ldlog.NewDisabledLoggers(), des.loggers)
 }
 
 func TestDataIsSentToAnalyticsURI(t *testing.T) {
@@ -202,16 +187,11 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 	}
 }
 
-func TestServerSideSenderHasDefaultClient(t *testing.T) {
-	es := NewServerSideEventSender(nil, sdkKey, fakeBaseURI, nil, ldlog.NewDisabledLoggers())
-	des := es.(*defaultEventSender)
-	assert.NotNil(t, des.httpClient)
-}
-
 func TestServerSideSenderSetsURIsFromBase(t *testing.T) {
 	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerWithStatus(202))
 	client := httphelpers.ClientFromHandler(handler)
-	es := NewServerSideEventSender(client, sdkKey, fakeBaseURI, nil, ldlog.NewDisabledLoggers())
+	es := NewServerSideEventSender(EventSenderConfiguration{Client: client, BaseURI: fakeBaseURI, Loggers: ldlog.NewDisabledLoggers()},
+		sdkKey)
 
 	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 	es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
@@ -226,7 +206,13 @@ func TestServerSideSenderSetsURIsFromBase(t *testing.T) {
 func TestServerSideSenderHasDefaultBaseURI(t *testing.T) {
 	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerWithStatus(202))
 	client := httphelpers.ClientFromHandler(handler)
-	es := NewServerSideEventSender(client, sdkKey, "", nil, ldlog.NewDisabledLoggers())
+	es := NewServerSideEventSender(
+		EventSenderConfiguration{
+			Client:  client,
+			Loggers: ldlog.NewDisabledLoggers(),
+		},
+		sdkKey,
+	)
 
 	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 	es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
@@ -243,7 +229,15 @@ func TestServerSideSenderAddsAuthorizationHeader(t *testing.T) {
 	client := httphelpers.ClientFromHandler(handler)
 	extraHeaders := make(http.Header)
 	extraHeaders.Set("my-header", "my-value")
-	es := NewServerSideEventSender(client, sdkKey, fakeBaseURI, extraHeaders, ldlog.NewDisabledLoggers())
+	es := NewServerSideEventSender(
+		EventSenderConfiguration{
+			Client:      client,
+			BaseURI:     fakeBaseURI,
+			BaseHeaders: func() http.Header { return extraHeaders },
+			Loggers:     ldlog.NewDisabledLoggers(),
+		},
+		sdkKey,
+	)
 
 	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
@@ -253,10 +247,55 @@ func TestServerSideSenderAddsAuthorizationHeader(t *testing.T) {
 	assert.Equal(t, "my-value", r.Request.Header.Get("my-header"))
 }
 
+func TestSchemaVersionCannotBeOverriddenWithServerSideSender(t *testing.T) {
+	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerForMethod("POST", httphelpers.HandlerWithStatus(202), nil))
+	client := httphelpers.ClientFromHandler(handler)
+
+	config := EventSenderConfiguration{Client: client, SchemaVersion: 99}
+	es := makeEventSenderWithConfig(config)
+
+	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
+
+	r := <-requestsCh
+	assert.Equal(t, currentEventSchema, r.Request.Header.Get(eventSchemaHeader))
+}
+
+func TestSchemaVersionCanBeOverriddenWithDirectSend(t *testing.T) {
+	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerForMethod("POST", httphelpers.HandlerWithStatus(202), nil))
+	client := httphelpers.ClientFromHandler(handler)
+
+	config := EventSenderConfiguration{Client: client, SchemaVersion: 99}
+
+	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, arbitraryJSONData, 1)
+
+	r := <-requestsCh
+	assert.Equal(t, "99", r.Request.Header.Get(eventSchemaHeader))
+}
+
+func TestSendEventDataCanUseDefaultHTTPClient(t *testing.T) {
+	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerForMethod("POST", httphelpers.HandlerWithStatus(202), nil))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	config := EventSenderConfiguration{BaseURI: server.URL}
+
+	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, arbitraryJSONData, 1)
+
+	r := <-requestsCh
+	assert.Equal(t, string(arbitraryJSONData), string(r.Body))
+}
+
+func makeEventSenderWithConfig(config EventSenderConfiguration) EventSender {
+	config.BaseURI = fakeBaseURI
+	config.Loggers = ldlog.NewDisabledLoggers()
+	if config.RetryDelay == 0 {
+		config.RetryDelay = briefRetryDelay
+	}
+	return NewServerSideEventSender(config, sdkKey)
+}
+
 func makeEventSenderWithHTTPClient(client *http.Client) EventSender {
-	es := NewDefaultEventSender(client, fakeEventsURI, fakeDiagnosticURI, nil, ldlog.NewDisabledLoggers())
-	(es.(*defaultEventSender)).retryDelay = briefRetryDelay
-	return es
+	return makeEventSenderWithConfig(EventSenderConfiguration{Client: client})
 }
 
 func makeEventSenderWithRequestSink() (EventSender, <-chan httphelpers.HTTPRequestInfo) {
