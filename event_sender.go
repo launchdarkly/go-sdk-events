@@ -30,6 +30,7 @@ type EventSenderConfiguration struct {
 	// BaseURI is the base URI to which the event endpoint paths will be added.
 	BaseURI string
 	// BaseHeaders contains any headers that should be added to the HTTP request, other than the schema version.
+	// The event delivery logic will never modify this map; it will clone it if necessary.
 	BaseHeaders func() http.Header
 	// SchemaVersion specifies the value for the X-LaunchDarkly-Event-Schema header, or 0 to use the latest version.
 	SchemaVersion int
@@ -79,6 +80,7 @@ func (s *defaultEventSender) SendEventData(kind EventDataKind, data []byte, even
 	return SendEventDataWithRetry(
 		s.config,
 		kind,
+		"",
 		data,
 		eventCount,
 	)
@@ -98,9 +100,13 @@ func (s *defaultEventSender) SendEventData(kind EventDataKind, data []byte, even
 // 3. If delivery fails with an unrecoverable error, such as an HTTP 401, return Success: false and MustShutDown: true.
 //
 // 4. If the response has a Date header, parse it into TimeFromServer.
+//
+// The overridePath parameter only needs to be set if you need to customize the URI path. If it is empty, the standard
+// path of /bulk or /diagnostic will be used as appropriate.
 func SendEventDataWithRetry(
 	config EventSenderConfiguration,
 	kind EventDataKind,
+	overridePath string,
 	data []byte,
 	eventCount int,
 ) EventSenderResult {
@@ -112,16 +118,11 @@ func SendEventDataWithRetry(
 	}
 	headers.Set("Content-Type", "application/json")
 
-	var uri string
-	var description string
+	var uri, path, description string
 
-	baseURI := strings.TrimRight(config.BaseURI, "/")
-	if baseURI == "" {
-		baseURI = defaultEventsURI
-	}
 	switch kind {
 	case AnalyticsEventDataKind:
-		uri = baseURI + "/bulk"
+		path = "/bulk"
 		description = fmt.Sprintf("%d events", eventCount)
 		if config.SchemaVersion == 0 {
 			headers.Add(eventSchemaHeader, currentEventSchema)
@@ -132,11 +133,20 @@ func SendEventDataWithRetry(
 		headers.Add(payloadIDHeader, payloadUUID.String())
 		// if NewRandom somehow failed, we'll just proceed with an empty string
 	case DiagnosticEventDataKind:
-		uri = baseURI + "/diagnostic"
+		path = "/diagnostic"
 		description = "diagnostic event"
 	default:
 		return EventSenderResult{}
 	}
+
+	if overridePath != "" {
+		path = "/" + strings.TrimLeft(overridePath, "/")
+	}
+	baseURI := strings.TrimRight(config.BaseURI, "/")
+	if baseURI == "" {
+		baseURI = defaultEventsURI
+	}
+	uri = baseURI + path
 
 	config.Loggers.Debugf("Sending %s: %s", description, data)
 
