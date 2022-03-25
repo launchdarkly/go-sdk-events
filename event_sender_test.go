@@ -266,9 +266,10 @@ func TestSchemaVersionCanBeOverriddenWithDirectSend(t *testing.T) {
 
 	config := EventSenderConfiguration{Client: client, SchemaVersion: 99}
 
-	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, arbitraryJSONData, 1)
+	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, "", arbitraryJSONData, 1)
 
 	r := <-requestsCh
+	assert.Equal(t, "/bulk", r.Request.URL.Path)
 	assert.Equal(t, "99", r.Request.Header.Get(eventSchemaHeader))
 }
 
@@ -279,10 +280,26 @@ func TestSendEventDataCanUseDefaultHTTPClient(t *testing.T) {
 
 	config := EventSenderConfiguration{BaseURI: server.URL}
 
-	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, arbitraryJSONData, 1)
+	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, "", arbitraryJSONData, 1)
 
 	r := <-requestsCh
+	assert.Equal(t, "/bulk", r.Request.URL.Path)
 	assert.Equal(t, string(arbitraryJSONData), string(r.Body))
+}
+
+func TestSendEventDataCanOverrideURI(t *testing.T) {
+	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerForMethod("POST", httphelpers.HandlerWithStatus(202), nil))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	config := EventSenderConfiguration{BaseURI: server.URL}
+
+	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, "/other/path", arbitraryJSONData, 1)
+	_ = SendEventDataWithRetry(config, AnalyticsEventDataKind, "other/path", arbitraryJSONData, 1)
+
+	r1, r2 := <-requestsCh, <-requestsCh
+	assert.Equal(t, "/other/path", r1.Request.URL.Path)
+	assert.Equal(t, "/other/path", r2.Request.URL.Path)
 }
 
 func makeEventSenderWithConfig(config EventSenderConfiguration) EventSender {
