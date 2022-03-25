@@ -161,19 +161,3 @@ func TestEventFactory(t *testing.T) {
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.CreationDate)
 	})
 }
-
-func TestPropertiesOfEventTypesNotFromFactory(t *testing.T) {
-	fakeTime := ldtime.UnixMillisecondTime(100000)
-	context := Context(ldcontext.New("key"))
-
-	t.Run("indexEvent", func(t *testing.T) {
-		ie := indexEvent{
-			BaseEvent: BaseEvent{
-				CreationDate: fakeTime,
-				Context:      context,
-			},
-		}
-		assert.Equal(t, ie.BaseEvent, ie.BaseEvent)
-		assert.Equal(t, ie.BaseEvent.CreationDate, ie.CreationDate)
-	})
-}
