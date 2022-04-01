@@ -34,7 +34,7 @@ var (
 
 func fakeTimeFn() ldtime.UnixMillisecondTime { return fakeTime }
 
-func basicContext() EventContext {
+func basicContext() EventInputContext {
 	return Context(ldcontext.NewBuilder(testContextKey).Name("Red").Build())
 }
 
@@ -47,7 +47,7 @@ func basicConfigWithoutPrivateAttrs() EventsConfiguration {
 	}
 }
 
-func contextJSON(c EventContext, config EventsConfiguration) json.RawMessage {
+func contextJSON(c EventInputContext, config EventsConfiguration) json.RawMessage {
 	formatter := newEventContextFormatter(config)
 	w := jwriter.NewWriter()
 	formatter.WriteContext(&w, &c)

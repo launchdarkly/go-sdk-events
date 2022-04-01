@@ -25,8 +25,8 @@ func BenchmarkEventOutputFormatterBasicEventsWithPrivateAttributes(b *testing.B)
 	ef := eventOutputFormatter{
 		contextFormatter: newEventContextFormatter(EventsConfiguration{
 			PrivateAttributes: []ldattr.Ref{
-				ldattr.NewNameRef("name"),
-				ldattr.NewNameRef("custom-attr"),
+				ldattr.NewLiteralRef("name"),
+				ldattr.NewLiteralRef("custom-attr"),
 			},
 		}),
 	}

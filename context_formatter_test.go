@@ -343,7 +343,7 @@ func TestPreserializedEventContextFormatterOutput(t *testing.T) {
 
 	type params struct {
 		desc         string
-		eventContext EventContext
+		eventContext EventInputContext
 		options      EventsConfiguration
 		expectedJSON string
 	}
