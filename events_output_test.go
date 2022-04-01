@@ -20,7 +20,7 @@ var (
 	withReasons    = NewEventFactory(true, fakeTimeFn)
 )
 
-func withTestContextsAndConfigs(t *testing.T, action func(*testing.T, EventContext, EventsConfiguration)) {
+func withTestContextsAndConfigs(t *testing.T, action func(*testing.T, EventInputContext, EventsConfiguration)) {
 	singleCtx := Context(ldcontext.New("user-key"))
 	multiCtx := Context(ldcontext.NewMulti(ldcontext.New("user-key"), ldcontext.NewWithKind("org", "org-key")))
 
@@ -45,7 +45,7 @@ func withTestContextsAndConfigs(t *testing.T, action func(*testing.T, EventConte
 }
 
 func TestEventOutputFullEvents(t *testing.T) {
-	withTestContextsAndConfigs(t, func(t *testing.T, context EventContext, config EventsConfiguration) {
+	withTestContextsAndConfigs(t, func(t *testing.T, context EventInputContext, config EventsConfiguration) {
 		flag := FlagEventProperties{Key: "flagkey", Version: 100}
 
 		formatter := eventOutputFormatter{

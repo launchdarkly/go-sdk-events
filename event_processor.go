@@ -246,7 +246,7 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	willAddFullEvent := true
 	var debugEvent anyEventInput
 	inlinedUser := false
-	var eventContext EventContext
+	var eventContext EventInputContext
 	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
 	case EvaluationData:

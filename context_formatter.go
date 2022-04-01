@@ -80,7 +80,7 @@ func makePrivateAttrLookupData(attrRefList []ldattr.Ref) map[string]*privateAttr
 
 // WriteContext serializes a Context in the format appropriate for an analytics event, redacting
 // private attributes if necessary.
-func (f *eventContextFormatter) WriteContext(w *jwriter.Writer, ec *EventContext) {
+func (f *eventContextFormatter) WriteContext(w *jwriter.Writer, ec *EventInputContext) {
 	if ec.preserialized != nil {
 		w.Raw(ec.preserialized)
 		return
@@ -117,8 +117,11 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 		if value := c.GetValue(key); value.IsDefined() {
 			if f.allAttributesPrivate {
 				// If allAttributesPrivate is true, then there's no complex filtering or recursing to be done: all of
-				// these values are by definition private, so just add their names to the redacted list.
-				escapedAttrName := ldattr.NewNameRef(key).String()
+				// these values are by definition private, so just add their names to the redacted list. Since the
+				// redacted list uses the attribute reference syntax, we may need to escape the value if the name of
+				// this individual attribute happens to be something like "/a/b"; the easiest way to do that is to
+				// call NewLiteralRef and then convert the Ref to an attribute reference string.
+				escapedAttrName := ldattr.NewLiteralRef(key).String()
 				redactedAttrs = append(redactedAttrs, escapedAttrName)
 				continue
 			}
@@ -149,7 +152,7 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 	obj.End()
 }
 
-func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, ec *EventContext) {
+func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, ec *EventInputContext) {
 	obj := w.Object()
 	obj.Name(ldattr.KindAttr).String(string(ldcontext.MultiKind))
 
