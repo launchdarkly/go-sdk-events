@@ -57,13 +57,13 @@ func withFeatureEventOrCustomEvent(
 	t *testing.T,
 	action func(
 		t *testing.T,
-		sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher),
+		sendEventFn func(EventProcessor, EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher),
 		finalEventMatchers []m.Matcher),
 ) {
 	t.Run("from feature event", func(t *testing.T) {
 		flag := FlagEventProperties{Key: "flagkey", Version: 11}
 		action(t,
-			func(ep EventProcessor, context EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
+			func(ep EventProcessor, context EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
 				fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "")
 				ep.RecordEvaluation(fe)
 				return fe, fe.CreationDate, nil
@@ -73,7 +73,7 @@ func withFeatureEventOrCustomEvent(
 
 	t.Run("from custom event", func(t *testing.T) {
 		action(t,
-			func(ep EventProcessor, context EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
+			func(ep EventProcessor, context EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
 				ce := defaultEventFactory.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0)
 				ep.RecordCustomEvent(ce)
 				return ce, ce.CreationDate, []m.Matcher{anyCustomEvent()}
@@ -143,7 +143,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 
 func TestIndexEventProperties(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
-		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
+		func(t *testing.T, sendEventFn func(EventProcessor, EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
 			withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 				ep, es := createEventProcessorAndSender(config)
 				defer ep.Close()
@@ -168,7 +168,7 @@ func TestIndexEventProperties(t *testing.T) {
 
 func TestIndexEventContextKeysAreDeduplicatedForSameKind(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
-		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
+		func(t *testing.T, sendEventFn func(EventProcessor, EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
 			withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 				ep, es := createEventProcessorAndSender(config)
 				defer ep.Close()
@@ -195,7 +195,7 @@ func TestIndexEventContextKeysAreDeduplicatedForSameKind(t *testing.T) {
 
 func TestIndexEventContextKeysAreDeduplicatedSeparatelyForDifferentKinds(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
-		func(t *testing.T, sendEventFn func(EventProcessor, EventContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
+		func(t *testing.T, sendEventFn func(EventProcessor, EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
 			withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 				ep, es := createEventProcessorAndSender(config)
 				defer ep.Close()
@@ -203,7 +203,7 @@ func TestIndexEventContextKeysAreDeduplicatedSeparatelyForDifferentKinds(t *test
 				key := "my-key"
 				context1 := Context(ldcontext.New(key))
 				context2 := Context(ldcontext.NewWithKind("org", key))
-				context3 := Context(ldcontext.NewMulti(ldcontext.New(key)))
+				context3 := Context(ldcontext.NewMulti(ldcontext.New(key), ldcontext.NewWithKind("other", key)))
 
 				_, creationDate1, allEventMatchers := sendEventFn(ep, context1)
 				_, creationDate2, moreMatchers := sendEventFn(ep, context2)
