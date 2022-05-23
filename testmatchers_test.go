@@ -148,16 +148,11 @@ func valueIsPositiveNonZeroInteger() m.Matcher {
 }
 
 func expectedContextKeys(c ldcontext.Context) map[string]string {
-	if c.Multiple() {
-		ret := make(map[string]string)
-		for i := 0; i < c.MultiKindCount(); i++ {
-			if mc, ok := c.MultiKindByIndex(i); ok {
-				ret[string(mc.Kind())] = mc.Key()
-			}
+	ret := make(map[string]string)
+	for i := 0; i < c.IndividualContextCount(); i++ {
+		if ic := c.IndividualContextByIndex(i); ic.IsDefined() {
+			ret[string(ic.Kind())] = ic.Key()
 		}
-		return ret
 	}
-	return map[string]string{
-		string(c.Kind()): c.Key(),
-	}
+	return ret
 }

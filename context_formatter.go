@@ -156,10 +156,11 @@ func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, ec 
 	obj := w.Object()
 	obj.Name(ldattr.KindAttr).String(string(ldcontext.MultiKind))
 
-	for i := 0; i < ec.context.MultiKindCount(); i++ {
-		mc, _ := ec.context.MultiKindByIndex(i)
-		obj.Name(string(mc.Kind()))
-		f.writeContextInternalSingle(w, &mc, false)
+	for i := 0; i < ec.context.IndividualContextCount(); i++ {
+		if ic := ec.context.IndividualContextByIndex(i); ic.IsDefined() {
+			obj.Name(string(ic.Kind()))
+			f.writeContextInternalSingle(w, &ic, false)
+		}
 	}
 
 	obj.End()
