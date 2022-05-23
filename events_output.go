@@ -103,14 +103,10 @@ func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime
 
 func writeContextKeys(obj *jwriter.ObjectState, c *ldcontext.Context) {
 	keysObj := obj.Name("contextKeys").Object()
-	if c.Multiple() {
-		for i := 0; i < c.MultiKindCount(); i++ {
-			if mc, ok := c.MultiKindByIndex(i); ok {
-				keysObj.Name(string(mc.Kind())).String(mc.Key())
-			}
+	for i := 0; i < c.IndividualContextCount(); i++ {
+		if ic := c.IndividualContextByIndex(i); ic.IsDefined() {
+			keysObj.Name(string(ic.Kind())).String(ic.Key())
 		}
-	} else {
-		keysObj.Name(string(c.Kind())).String(c.Key())
 	}
 	keysObj.End()
 }
