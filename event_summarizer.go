@@ -72,14 +72,10 @@ func (s *eventSummarizer) summarizeEvent(ed EvaluationData) {
 		}
 	}
 
-	if ed.Context.context.Multiple() {
-		for i := 0; i < ed.Context.context.MultiKindCount(); i++ {
-			if mc, ok := ed.Context.context.MultiKindByIndex(i); ok {
-				flag.contextKinds[mc.Kind()] = struct{}{}
-			}
+	for i := 0; i < ed.Context.context.IndividualContextCount(); i++ {
+		if ic := ed.Context.context.IndividualContextByIndex(i); ic.IsDefined() {
+			flag.contextKinds[ic.Kind()] = struct{}{}
 		}
-	} else {
-		flag.contextKinds[ed.Context.context.Kind()] = struct{}{}
 	}
 
 	creationDate := ed.CreationDate
