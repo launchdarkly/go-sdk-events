@@ -158,12 +158,12 @@ func TestEventContextFormatterOutput(t *testing.T) {
 				"user": {"key": "user-key", "name": "user-name", "address": {"city": "SF", "state": "CA"}}}`,
 		},
 		{
-			"transient",
+			"anonymous",
 			ldcontext.NewBuilder("my-key").Kind("org").
-				Transient(true).
+				Anonymous(true).
 				Build(),
 			EventsConfiguration{},
-			`{"kind": "org", "key": "my-key", "transient": true}`,
+			`{"kind": "org", "key": "my-key", "anonymous": true}`,
 		},
 		{
 			"secondary",
