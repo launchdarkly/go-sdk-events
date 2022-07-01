@@ -130,8 +130,8 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 		}
 	}
 
-	if c.Transient() {
-		obj.Name(ldattr.TransientAttr).Bool(true)
+	if c.Anonymous() {
+		obj.Name(ldattr.AnonymousAttr).Bool(true)
 	}
 
 	if c.Secondary().IsDefined() || len(redactedAttrs) != 0 {
