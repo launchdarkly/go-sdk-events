@@ -9,8 +9,8 @@ import (
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 
-	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
-	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
+	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
+	"github.com/launchdarkly/go-test-helpers/v3/jsonhelpers"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -324,7 +324,7 @@ func TestEventContextFormatterOutput(t *testing.T) {
 			f.WriteContext(&w, &ec)
 			require.NoError(t, w.Error())
 			actualJSON := sortPrivateAttributesInOutputJSON(w.Bytes())
-			m.In(t).Assert(actualJSON, m.JSONStrEqual(p.expectedJSON))
+			jsonhelpers.AssertEqual(t, p.expectedJSON, actualJSON)
 		})
 	}
 }
@@ -376,7 +376,7 @@ func TestPreserializedEventContextFormatterOutput(t *testing.T) {
 			f.WriteContext(&w, &p.eventContext)
 			require.NoError(t, w.Error())
 			actualJSON := w.Bytes() // don't need to sort the private attrs here because they are copied straight from the input
-			m.In(t).Assert(actualJSON, m.JSONStrEqual(p.expectedJSON))
+			jsonhelpers.AssertEqual(t, p.expectedJSON, actualJSON)
 		})
 	}
 }
