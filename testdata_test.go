@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
+	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldreason"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"

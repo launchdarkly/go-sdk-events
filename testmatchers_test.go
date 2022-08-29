@@ -8,8 +8,8 @@ import (
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 
-	"github.com/launchdarkly/go-test-helpers/v2/jsonhelpers"
-	m "github.com/launchdarkly/go-test-helpers/v2/matchers"
+	"github.com/launchdarkly/go-test-helpers/v3/jsonhelpers"
+	m "github.com/launchdarkly/go-test-helpers/v3/matchers"
 )
 
 func equalNumericTime(unixTime ldtime.UnixMillisecondTime) m.Matcher {
