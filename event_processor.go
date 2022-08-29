@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/launchdarkly/go-jsonstream/v2/jwriter"
+	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
