@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/google/uuid v1.1.1
 	github.com/launchdarkly/go-jsonstream/v3 v3.0.0
-	github.com/launchdarkly/go-sdk-common/v3 v3.0.0-alpha.pub.13
+	github.com/launchdarkly/go-sdk-common/v3 v3.0.0-alpha.pub.14
 	github.com/launchdarkly/go-test-helpers/v3 v3.0.1
 	github.com/stretchr/testify v1.6.1
 )
