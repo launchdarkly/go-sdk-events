@@ -59,7 +59,7 @@ func makePrivateAttrLookupData(attrRefList []ldattr.Ref) map[string]*privateAttr
 	for _, a := range attrRefList {
 		parentMap := &ret
 		for i := 0; i < a.Depth(); i++ {
-			name, _ := a.Component(i)
+			name := a.Component(i)
 			if *parentMap == nil {
 				*parentMap = make(map[string]*privateAttrLookupNode)
 			}
@@ -276,7 +276,7 @@ func (f *eventContextFormatter) maybeRedact(
 		}
 		match := true
 		for j := 0; j < len(attrPath); j++ {
-			name, _ := a.Component(j)
+			name := a.Component(j)
 			if name != attrPath[j] {
 				match = false
 				break
