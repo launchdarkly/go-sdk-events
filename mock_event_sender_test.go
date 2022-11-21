@@ -50,7 +50,7 @@ func (ms *mockEventSender) SendEventData(kind EventDataKind, data []byte, eventC
 	ms.lock.Unlock()
 
 	if gateCh != nil {
-		// instrumentation used for TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy
+		// instrumentation used for TestBlockingFlush and TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy
 		waitingCh <- struct{}{}
 		<-gateCh
 	}

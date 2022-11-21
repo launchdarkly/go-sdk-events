@@ -50,7 +50,9 @@ type sendEventMessage struct {
 	event anyEventInput
 }
 
-type flushEventsMessage struct{}
+type flushEventsMessage struct {
+	replyCh chan struct{}
+}
 
 type shutdownEventsMessage struct {
 	replyCh chan struct{}
@@ -92,6 +94,24 @@ func (ep *defaultEventProcessor) RecordRawEvent(data json.RawMessage) {
 
 func (ep *defaultEventProcessor) Flush() {
 	ep.postNonBlockingMessageToInbox(flushEventsMessage{})
+}
+
+func (ep *defaultEventProcessor) FlushBlocking(timeout time.Duration) bool {
+	replyCh := make(chan struct{}, 1)
+	m := flushEventsMessage{replyCh: replyCh}
+	ep.inboxCh <- m
+	var deadline <-chan time.Time
+	if timeout > 0 {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		deadline = timer.C
+	}
+	select {
+	case <-m.replyCh:
+		return true
+	case <-deadline:
+		return false
+	}
 }
 
 func (ep *defaultEventProcessor) postNonBlockingMessageToInbox(e eventDispatcherMessage) {
@@ -204,6 +224,10 @@ func (ed *eventDispatcher) runMainLoop(
 				ed.processEvent(m.event)
 			case flushEventsMessage:
 				ed.triggerFlush()
+				if m.replyCh != nil {
+					ed.workersGroup.Wait() // Wait for all in-progress flushes to complete
+					m.replyCh <- struct{}{}
+				}
 			case syncEventsMessage:
 				ed.workersGroup.Wait()
 				m.replyCh <- struct{}{}

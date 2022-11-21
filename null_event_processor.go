@@ -1,6 +1,9 @@
 package ldevents
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type nullEventProcessor struct{}
 
@@ -18,6 +21,8 @@ func (n nullEventProcessor) RecordCustomEvent(e CustomEventData) {}
 func (n nullEventProcessor) RecordRawEvent(data json.RawMessage) {}
 
 func (n nullEventProcessor) Flush() {}
+
+func (n nullEventProcessor) FlushBlocking(time.Duration) bool { return true }
 
 func (n nullEventProcessor) Close() error {
 	return nil
