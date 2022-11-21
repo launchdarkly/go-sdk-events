@@ -2,6 +2,7 @@ package ldevents
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
@@ -27,6 +28,14 @@ type EventProcessor interface {
 	// for the next flush interval. This method is asynchronous, so events still may not be sent
 	// until a later time.
 	Flush()
+
+	// FlushBlocking attempts to flush any buffered events, blocking until either they have been
+	// successfully delivered or delivery has failed. If there were no buffered events, it returns true
+	// immediately. The timeout parameter, if non-zero, specifies the maximum amount of time to wait
+	// before the method will return; a timeout does not stop the event processor from continuing to
+	// try to deliver the events in the background, if applicable. The method returns true on completion
+	// or false if timed out.
+	FlushBlocking(timeout time.Duration) bool
 
 	// Close shuts down all event processor activity, after first ensuring that all events have been
 	// delivered. Subsequent calls to SendEvent() or Flush() will be ignored.

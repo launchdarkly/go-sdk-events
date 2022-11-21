@@ -18,5 +18,7 @@ func TestNullEventProcessor(t *testing.T) {
 	n.RecordCustomEvent(defaultEventFactory.NewCustomEventData("x", basicContext(), ldvalue.Null(), false, 0))
 	n.RecordRawEvent([]byte("{}"))
 	n.Flush()
+	n.FlushBlocking(0)
+
 	require.NoError(t, n.Close())
 }

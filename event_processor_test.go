@@ -91,7 +91,6 @@ func TestIdentifyEventProperties(t *testing.T) {
 		ie := defaultEventFactory.NewIdentifyEventData(context)
 		ep.RecordIdentifyEvent(ie)
 		ep.Flush()
-		ep.waitUntilInactive()
 
 		assertEventsReceived(t, es, m.JSONEqual(map[string]interface{}{
 			"kind":         "identify",
@@ -493,6 +492,52 @@ func TestPeriodicFlush(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
+func TestBlockingFlush(t *testing.T) {
+	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
+	defer ep.Close()
+
+	senderGateCh := make(chan struct{}, 1)
+	senderWaitingCh := make(chan struct{}, 1)
+	es.setGate(senderGateCh, senderWaitingCh)
+
+	didFlush := make(chan struct{}, 1)
+	go func() {
+		<-senderWaitingCh
+		time.Sleep(time.Millisecond * 100)
+		didFlush <- struct{}{}
+		senderGateCh <- struct{}{}
+	}()
+
+	ep.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext()))
+	success := ep.FlushBlocking(time.Second)
+
+	assert.True(t, success)
+	assert.NotEqual(t, 0, len(didFlush))
+}
+
+func TestBlockingFlushTimeout(t *testing.T) {
+	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
+	defer ep.Close()
+
+	senderGateCh := make(chan struct{}, 1)
+	senderWaitingCh := make(chan struct{}, 1)
+	es.setGate(senderGateCh, senderWaitingCh)
+
+	didFlush := make(chan struct{}, 1)
+	go func() {
+		<-senderWaitingCh
+		time.Sleep(time.Millisecond * 500)
+		didFlush <- struct{}{}
+		senderGateCh <- struct{}{}
+	}()
+
+	ep.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext()))
+	success := ep.FlushBlocking(time.Millisecond * 50)
+
+	assert.False(t, success)
+	assert.Equal(t, 0, len(didFlush))
+}
+
 func TestClosingEventProcessorForcesSynchronousFlush(t *testing.T) {
 	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
 	defer ep.Close()
@@ -547,8 +592,7 @@ func TestNothingIsSentIfThereAreNoEvents(t *testing.T) {
 	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
 	defer ep.Close()
 
-	ep.Flush()
-	ep.waitUntilInactive()
+	ep.FlushBlocking(time.Second)
 
 	es.assertNoMoreEvents(t)
 }
@@ -565,8 +609,7 @@ func TestEventProcessorStopsSendingEventsAfterUnrecoverableError(t *testing.T) {
 	es.awaitEvent(t)
 
 	ep.RecordIdentifyEvent(ie)
-	ep.Flush()
-	ep.waitUntilInactive()
+	ep.FlushBlocking(time.Second)
 
 	es.assertNoMoreEvents(t)
 }
