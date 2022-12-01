@@ -166,14 +166,6 @@ func TestEventContextFormatterOutput(t *testing.T) {
 			`{"kind": "org", "key": "my-key", "anonymous": true}`,
 		},
 		{
-			"secondary",
-			ldcontext.NewBuilder("my-key").Kind("org").
-				Secondary("x").
-				Build(),
-			EventsConfiguration{},
-			`{"kind": "org", "key": "my-key", "_meta": {"secondary": "x"}}`,
-		},
-		{
 			"all attributes private globally, single kind",
 			ldcontext.NewBuilder("my-key").Kind("org").
 				Name("my-name").
@@ -304,17 +296,6 @@ func TestEventContextFormatterOutput(t *testing.T) {
 			EventsConfiguration{AllAttributesPrivate: true},
 			`{"kind": "org", "key": "my-key",
 				"_meta": {"redactedAttributes": ["/~1a~1b~0c"]}}`,
-		},
-		{
-			"meta has both private and secondary",
-			ldcontext.NewBuilder("my-key").Kind("org").
-				Name("x").
-				Secondary("y").
-				Private("name").
-				Build(),
-			EventsConfiguration{AllAttributesPrivate: true},
-			`{"kind": "org", "key": "my-key",
-				"_meta": {"redactedAttributes": ["name"], "secondary": "y"}}`,
 		},
 	} {
 		t.Run(p.desc, func(t *testing.T) {

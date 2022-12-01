@@ -134,18 +134,14 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 		obj.Name(ldattr.AnonymousAttr).Bool(true)
 	}
 
-	if c.Secondary().IsDefined() || len(redactedAttrs) != 0 {
+	anyRedacted := len(redactedAttrs) != 0
+	if anyRedacted {
 		metaJSON := obj.Name("_meta").Object()
-		if s, defined := c.Secondary().Get(); defined {
-			metaJSON.Name("secondary").String(s)
+		privateAttrsJSON := metaJSON.Name("redactedAttributes").Array()
+		for _, a := range redactedAttrs {
+			privateAttrsJSON.String(a)
 		}
-		if len(redactedAttrs) != 0 {
-			privateAttrsJSON := metaJSON.Name("redactedAttributes").Array()
-			for _, a := range redactedAttrs {
-				privateAttrsJSON.String(a)
-			}
-			privateAttrsJSON.End()
-		}
+		privateAttrsJSON.End()
 		metaJSON.End()
 	}
 
