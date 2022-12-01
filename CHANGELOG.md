@@ -2,6 +2,32 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.0.0] - 2022-12-01
+This major version release of `go-sdk-events` corresponds to the upcoming v6.0.0 release of the LaunchDarkly Go SDK (`go-server-sdk`), and cannot be used with earlier SDK versions. As before, this package is intended for internal use by the Go SDK, and by LaunchDarkly services; other use is unsupported.
+
+### Added:
+- `EventProcessor.FlushBlocking`
+- `EventProcessor.RecordRawEvent`
+- `EventInputContext`
+- `NewServerSideEventSender`
+- `PreserializedContext`
+- `SendEventDataWithRetry`
+
+### Changed:
+- The minimum Go version is now 1.18.
+- The package now uses a regular import path (`github.com/launchdarkly/go-sdk-events/v2`) rather than a `gopkg.in` path (`gopkg.in/launchdarkly/go-sdk-events.v1`).
+- The dependency on `gopkg.in/launchdarkly/go-sdk-common.v2` has been changed to `github.com/launchdarkly/go-sdk-common/v3`.
+- Events now use the `ldcontext.Context` type rather than `lduser.User`.
+- Private attributes can now be designated with the `ldattr.Ref` type, which allows redaction of either a full attribute or a property within a JSON object value.
+- There is a new JSON schema for analytics events. The HTTP headers for event payloads now report the schema version as 4.
+- Renamed `FeatureRequestEvent`, `IdentifyEvent`, and `CustomEvent` to `EvaluationData`, `IdentifyEventData`, and `CustomEventData`, to clarify that they are inputs affecting events rather than the events themselves.
+
+### Removed:
+- All alias event functionality
+- `EventsConfiguration.InlineUsersInEvents`
+- `FlagEventProperties`
+- `NewDefaultEventSender`
+
 ## [1.1.1] - 2021-06-03
 ### Fixed:
 - Updated `go-jsonstream` and `go-sdk-common` dependencies to latest patch versions for JSON parsing fixes. Those patches should not affect `go-sdk-events` since it does not _parse_ JSON, but this ensures that the latest release has the most correct transitive dependencies.
