@@ -119,6 +119,24 @@ func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {
 	})
 }
 
+func TestFeatureEventDoesNotGenerateIndexEventIfIndexEventsAreDisabled(t *testing.T) {
+	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
+		config.DisableIndexEvents = true
+		ep, es := createEventProcessorAndSender(config)
+		defer ep.Close()
+
+		flag := FlagEventProperties{Key: "flagkey", Version: 11}
+		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "")
+		ep.RecordEvaluation(fe)
+		ep.Flush()
+
+		assertEventsReceived(t, es,
+			summaryEventWithFlag(flag, summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
+		)
+		es.assertNoMoreEvents(t)
+	})
+}
+
 func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 		ep, es := createEventProcessorAndSender(config)
@@ -461,6 +479,23 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
 		customEventMatcher,
+	)
+	es.assertNoMoreEvents(t)
+}
+
+func TestCustomEventDoesNotGenerateIndexEventIfIndexEventsAreDisabled(t *testing.T) {
+	config := basicConfigWithoutPrivateAttrs()
+	config.DisableIndexEvents = true
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	context := basicContext()
+	ce := defaultEventFactory.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0)
+	ep.RecordCustomEvent(ce)
+	ep.Flush()
+
+	assertEventsReceived(t, es,
+		anyCustomEvent(),
 	)
 	es.assertNoMoreEvents(t)
 }

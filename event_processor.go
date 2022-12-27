@@ -28,7 +28,7 @@ type eventDispatcher struct {
 	outbox               *eventsOutbox
 	flushCh              chan *flushPayload
 	workersGroup         *sync.WaitGroup
-	userKeys             lruCache
+	contextKeys          lruCache
 	lastKnownPastTime    ldtime.UnixMillisecondTime
 	deduplicatedContexts int
 	eventsInLastBatch    int
@@ -151,8 +151,10 @@ func startEventDispatcher(
 		outbox:             newEventsOutbox(config.Capacity, config.Loggers),
 		flushCh:            make(chan *flushPayload, 1),
 		workersGroup:       &sync.WaitGroup{},
-		userKeys:           newLruCache(config.UserKeysCapacity),
 		currentTimestampFn: config.currentTimeProvider,
+	}
+	if !config.DisableIndexEvents {
+		ed.contextKeys = newLruCache(config.UserKeysCapacity)
 	}
 
 	if ed.currentTimestampFn == nil {
@@ -187,12 +189,18 @@ func (ed *eventDispatcher) runMainLoop(
 	if flushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
 		flushInterval = DefaultFlushInterval
 	}
-	userKeysFlushInterval := ed.config.UserKeysFlushInterval
-	if userKeysFlushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
-		userKeysFlushInterval = DefaultUserKeysFlushInterval
-	}
 	flushTicker := time.NewTicker(flushInterval)
-	usersResetTicker := time.NewTicker(userKeysFlushInterval)
+	defer flushTicker.Stop()
+	var contextKeysFlushTickerCh <-chan time.Time
+	if !ed.config.DisableIndexEvents {
+		contextKeysFlushInterval := ed.config.UserKeysFlushInterval
+		if contextKeysFlushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
+			contextKeysFlushInterval = DefaultUserKeysFlushInterval
+		}
+		contextKeysFlushTicker := time.NewTicker(contextKeysFlushInterval)
+		defer contextKeysFlushTicker.Stop()
+		contextKeysFlushTickerCh = contextKeysFlushTicker.C
+	}
 
 	var diagnosticsTicker *time.Ticker
 	var diagnosticsTickerCh <-chan time.Time
@@ -211,6 +219,7 @@ func (ed *eventDispatcher) runMainLoop(
 			}
 		}
 		diagnosticsTicker = time.NewTicker(interval)
+		defer diagnosticsTicker.Stop()
 		diagnosticsTickerCh = diagnosticsTicker.C
 	}
 
@@ -232,11 +241,6 @@ func (ed *eventDispatcher) runMainLoop(
 				ed.workersGroup.Wait()
 				m.replyCh <- struct{}{}
 			case shutdownEventsMessage:
-				flushTicker.Stop()
-				usersResetTicker.Stop()
-				if diagnosticsTicker != nil {
-					diagnosticsTicker.Stop()
-				}
 				ed.workersGroup.Wait() // Wait for all in-progress flushes to complete
 				close(ed.flushCh)      // Causes all idle flush workers to terminate
 				m.replyCh <- struct{}{}
@@ -244,8 +248,8 @@ func (ed *eventDispatcher) runMainLoop(
 			}
 		case <-flushTicker.C:
 			ed.triggerFlush()
-		case <-usersResetTicker.C:
-			ed.userKeys.clear()
+		case <-contextKeysFlushTickerCh:
+			ed.contextKeys.clear()
 		case <-diagnosticsTickerCh:
 			if diagnosticsManager == nil || !diagnosticsManager.CanSendStatsEvent() {
 				// COVERAGE: no way to test this logic in unit tests
@@ -296,15 +300,18 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	}
 	// For each context we haven't seen before, we add an index event before the event that referenced
 	// the context - unless the original event will contain an inline context (e.g. an identify event).
-	alreadySeenUser := ed.userKeys.add(eventContext.context.FullyQualifiedKey())
-	if !(willAddFullEvent && inlinedUser) {
-		if alreadySeenUser {
-			ed.deduplicatedContexts++
-		} else {
-			indexEvent := indexEvent{
-				BaseEvent{CreationDate: creationDate, Context: eventContext},
+	// This is the default behavior, which is turned off in the client-side SDK with DisableIndexEvents.
+	if !ed.config.DisableIndexEvents {
+		alreadySeenUser := ed.contextKeys.add(eventContext.context.FullyQualifiedKey())
+		if !(willAddFullEvent && inlinedUser) {
+			if alreadySeenUser {
+				ed.deduplicatedContexts++
+			} else {
+				indexEvent := indexEvent{
+					BaseEvent{CreationDate: creationDate, Context: eventContext},
+				}
+				ed.outbox.addEvent(indexEvent)
 			}
-			ed.outbox.addEvent(indexEvent)
 		}
 	}
 	if willAddFullEvent {
