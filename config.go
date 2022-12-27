@@ -33,6 +33,9 @@ type EventsConfiguration struct {
 	// An object that computes and formats diagnostic event data. This is only used within the SDK; for all other usage
 	// of the ldevents package, it should be nil.
 	DiagnosticsManager *DiagnosticsManager
+	// True if we should skip generating index events (which also turns off the context key cache). Used in the
+	// client-side SDK.
+	DisableIndexEvents bool
 	// The implementation of event delivery to use.
 	EventSender EventSender
 	// The time between flushes of the event buffer. Decreasing the flush interval means that the event buffer
