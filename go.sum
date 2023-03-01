@@ -14,6 +14,8 @@ github.com/launchdarkly/go-jsonstream/v3 v3.0.0 h1:qJF/WI09EUJ7kSpmP5d1Rhc81NQdY
 github.com/launchdarkly/go-jsonstream/v3 v3.0.0/go.mod h1:/1Gyml6fnD309JOvunOSfyysWbZ/ZzcA120gF/cQtC4=
 github.com/launchdarkly/go-sdk-common/v3 v3.0.0 h1:ITDJTDfFUvfQMz2N59qEOJtztxNZd7QWLPoj8JPFDHw=
 github.com/launchdarkly/go-sdk-common/v3 v3.0.0/go.mod h1:H/zISoCNhviHTTqqBjIKQy2YgSHT8ioL1FtgBKpiEGg=
+github.com/launchdarkly/go-sdk-common/v3 v3.0.1 h1:rVdLusAIViduNvyjNKy06RA+SPwk0Eq+NocNd1opDhk=
+github.com/launchdarkly/go-sdk-common/v3 v3.0.1/go.mod h1:H/zISoCNhviHTTqqBjIKQy2YgSHT8ioL1FtgBKpiEGg=
 github.com/launchdarkly/go-test-helpers/v3 v3.0.1 h1:Z4lUVrh7+hIvL47KVjEBE/owbqqjKUEYTp4aBX/5OZM=
 github.com/launchdarkly/go-test-helpers/v3 v3.0.1/go.mod h1:u2ZvJlc/DDJTFrshWW50tWMZHLVYXofuSHUfTU/eIwM=
 github.com/mailru/easyjson v0.7.6 h1:8yTIVnZgCoiM1TgqoeTl+LfU5Jg6/xL3QhGQnimLYnA=
