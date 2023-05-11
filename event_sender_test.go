@@ -187,6 +187,21 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 	}
 }
 
+func TestEventSenderDoesNotShutdownOnLargePayload(t *testing.T) {
+	errorInfo := errorInfo{413}
+	t.Run(fmt.Sprintf("Fails permanently after %s", errorInfo), func(t *testing.T) {
+		handler, _ := httphelpers.RecordingHandler(
+			httphelpers.SequentialHandler(errorInfo.Handler()),
+		)
+		es := makeEventSenderWithHTTPClient(httphelpers.ClientFromHandler(handler))
+
+		result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
+
+		assert.False(t, result.Success)
+		assert.False(t, result.MustShutDown)
+	})
+}
+
 func TestServerSideSenderSetsURIsFromBase(t *testing.T) {
 	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerWithStatus(202))
 	client := httphelpers.ClientFromHandler(handler)

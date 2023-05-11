@@ -478,6 +478,30 @@ func TestRawEventIsQueued(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
+func TestShutdownPreventsFurtherEventsFromReachingSender(t *testing.T) {
+	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
+	defer ep.Close()
+
+	es.result = EventSenderResult{MustShutDown: true}
+	firstMessage := json.RawMessage(`{"kind":"raw","arbitrary":["first","attempt"]}`)
+	ep.RecordRawEvent(firstMessage)
+	ep.Flush()
+	ep.waitUntilInactive()
+
+	es.result = EventSenderResult{Success: true}
+	secondMessage := json.RawMessage(`{"kind":"raw","arbitrary":["second", "attempt"]}`)
+	ep.RecordRawEvent(secondMessage)
+	ep.RecordRawEvent(secondMessage)
+	ep.Flush()
+
+	// We have the first event because the sender is a mock that just records
+	// everything sent to it, regardless of its response. However, once we
+	// return a shutdown message, the processor should stop sending new events
+	// to the sender mock.
+	assertEventsReceived(t, es, m.JSONEqual(firstMessage))
+	es.assertNoMoreEvents(t)
+}
+
 func TestPeriodicFlush(t *testing.T) {
 	config := basicConfigWithoutPrivateAttrs()
 	config.FlushInterval = 10 * time.Millisecond

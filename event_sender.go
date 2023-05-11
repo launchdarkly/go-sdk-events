@@ -199,7 +199,11 @@ func SendEventDataWithRetry(
 			config.Loggers.Warnf(httpErrorMessage(resp.StatusCode, "sending events", maybeRetry))
 		} else {
 			config.Loggers.Warnf(httpErrorMessage(resp.StatusCode, "sending events", ""))
-			return EventSenderResult{MustShutDown: true}
+			// Large payloads mean this particular request is a failure, but
+			// that doesn't mean subsequent payloads won't be small enough to
+			// succeed.
+			tooLarge := resp.StatusCode == http.StatusRequestEntityTooLarge
+			return EventSenderResult{MustShutDown: !tooLarge}
 		}
 	}
 	return EventSenderResult{}

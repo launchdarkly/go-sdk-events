@@ -27,6 +27,7 @@ type eventDispatcher struct {
 	config               EventsConfiguration
 	outbox               *eventsOutbox
 	flushCh              chan *flushPayload
+	senderResultCh       chan EventSenderResult
 	workersGroup         *sync.WaitGroup
 	userKeys             lruCache
 	lastKnownPastTime    ldtime.UnixMillisecondTime
@@ -34,7 +35,6 @@ type eventDispatcher struct {
 	eventsInLastBatch    int
 	disabled             bool
 	currentTimestampFn   func() ldtime.UnixMillisecondTime
-	stateLock            sync.Mutex
 }
 
 type flushPayload struct {
@@ -150,6 +150,7 @@ func startEventDispatcher(
 		config:             config,
 		outbox:             newEventsOutbox(config.Capacity, config.Loggers),
 		flushCh:            make(chan *flushPayload, 1),
+		senderResultCh:     make(chan EventSenderResult, maxFlushWorkers),
 		workersGroup:       &sync.WaitGroup{},
 		userKeys:           newLruCache(config.UserKeysCapacity),
 		currentTimestampFn: config.currentTimeProvider,
@@ -167,7 +168,7 @@ func startEventDispatcher(
 	// Start a fixed-size pool of workers that wait on flushTriggerCh. This is the
 	// maximum number of flushes we can do concurrently.
 	for i := 0; i < maxFlushWorkers; i++ {
-		go runFlushTask(config, formatter, ed.flushCh, ed.workersGroup, ed.handleResult)
+		go runFlushTask(config, formatter, ed.flushCh, ed.workersGroup, ed.senderResultCh)
 	}
 	if config.DiagnosticsManager != nil {
 		event := config.DiagnosticsManager.CreateInitEvent()
@@ -239,8 +240,18 @@ func (ed *eventDispatcher) runMainLoop(
 				}
 				ed.workersGroup.Wait() // Wait for all in-progress flushes to complete
 				close(ed.flushCh)      // Causes all idle flush workers to terminate
+				close(ed.senderResultCh)
 				m.replyCh <- struct{}{}
 				return
+			}
+		case result := <-ed.senderResultCh:
+			if ed.disabled { // COVERAGE: no way to simulate in unit tests
+				continue
+			} else if result.MustShutDown {
+				ed.disabled = true
+				ed.outbox.clear()
+			} else if result.TimeFromServer > 0 {
+				ed.lastKnownPastTime = result.TimeFromServer
 			}
 		case <-flushTicker.C:
 			ed.triggerFlush()
@@ -265,6 +276,10 @@ func (ed *eventDispatcher) runMainLoop(
 }
 
 func (ed *eventDispatcher) processEvent(evt anyEventInput) {
+	if ed.disabled {
+		return
+	}
+
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
@@ -323,16 +338,13 @@ func (ed *eventDispatcher) shouldDebugEvent(evt *EvaluationData) bool {
 	// In case the client's time is set wrong, at least we know that any expiration date
 	// earlier than that point is definitely in the past.  If there's any discrepancy, we
 	// want to err on the side of cutting off event debugging sooner.
-	ed.stateLock.Lock() // This should be done infrequently since it's only for debug events
-	defer ed.stateLock.Unlock()
 	return evt.DebugEventsUntilDate > ed.lastKnownPastTime &&
 		evt.DebugEventsUntilDate > ed.currentTimestampFn()
 }
 
 // Signal that we would like to do a flush as soon as possible.
 func (ed *eventDispatcher) triggerFlush() {
-	if ed.isDisabled() {
-		ed.outbox.clear()
+	if ed.disabled {
 		return
 	}
 	// Is there anything to flush?
@@ -360,25 +372,6 @@ func (ed *eventDispatcher) triggerFlush() {
 	}
 }
 
-func (ed *eventDispatcher) isDisabled() bool {
-	// Since we're using a mutex, we should avoid calling this often.
-	ed.stateLock.Lock()
-	defer ed.stateLock.Unlock()
-	return ed.disabled
-}
-
-func (ed *eventDispatcher) handleResult(result EventSenderResult) {
-	if result.MustShutDown {
-		ed.stateLock.Lock()
-		defer ed.stateLock.Unlock()
-		ed.disabled = true
-	} else if result.TimeFromServer > 0 {
-		ed.stateLock.Lock()
-		defer ed.stateLock.Unlock()
-		ed.lastKnownPastTime = result.TimeFromServer
-	}
-}
-
 func (ed *eventDispatcher) sendDiagnosticsEvent(
 	event ldvalue.Value,
 ) {
@@ -398,7 +391,7 @@ func (ed *eventDispatcher) sendDiagnosticsEvent(
 }
 
 func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
-	workersGroup *sync.WaitGroup, resultFn func(EventSenderResult)) {
+	workersGroup *sync.WaitGroup, senderResultCh chan<- EventSenderResult) {
 	for {
 		payload, more := <-flushCh
 		if !more {
@@ -414,7 +407,7 @@ func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, f
 			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)
 			if len(bytes) > 0 {
 				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, count)
-				resultFn(result)
+				senderResultCh <- result
 			}
 		}
 		workersGroup.Done() // Decrement the count of in-progress flushes
