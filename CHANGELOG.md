@@ -2,6 +2,11 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.0.2] - 2023-05-11
+### Fixed:
+- Do not queue subsequent events after unrecoverable error in the event processor.
+- HTTP status code 413 will no longer trigger an event processor shutdown.
+
 ## [2.0.1] - 2023-03-01
 ### Changed:
 - Bumped go-sdk-common to v3.0.1.
