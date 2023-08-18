@@ -88,6 +88,10 @@ func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEventData) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
+func (ep *defaultEventProcessor) RecordMigrationOpEvent(e MigrationOpEventData) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+}
+
 func (ep *defaultEventProcessor) RecordRawEvent(data json.RawMessage) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: rawEvent{data: data}})
 }

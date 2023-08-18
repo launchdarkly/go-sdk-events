@@ -20,6 +20,9 @@ type EventProcessor interface {
 	// RecordCustomEvent records a custom event asynchronously.
 	RecordCustomEvent(CustomEventData)
 
+	// RecordMigrationOpEvent records a migration operation event asynchronously.
+	RecordMigrationOpEvent(MigrationOpEventData)
+
 	// RecordRawEvent adds an event to the output buffer that is not parsed or transformed in any way.
 	// This is used by the Relay Proxy when forwarding events.
 	RecordRawEvent(data json.RawMessage)

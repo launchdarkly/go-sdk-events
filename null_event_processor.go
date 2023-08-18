@@ -18,6 +18,8 @@ func (n nullEventProcessor) RecordIdentifyEvent(e IdentifyEventData) {}
 
 func (n nullEventProcessor) RecordCustomEvent(e CustomEventData) {}
 
+func (n nullEventProcessor) RecordMigrationOpEvent(e MigrationOpEventData) {}
+
 func (n nullEventProcessor) RecordRawEvent(data json.RawMessage) {}
 
 func (n nullEventProcessor) Flush() {}

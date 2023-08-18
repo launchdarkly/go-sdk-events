@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldmigration"
 	"github.com/launchdarkly/go-sdk-common/v3/ldreason"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 	"github.com/launchdarkly/go-sdk-common/v3/lduser"
@@ -99,6 +100,89 @@ func TestIdentifyEventProperties(t *testing.T) {
 		}))
 		es.assertNoMoreEvents(t)
 	})
+}
+
+func TestMigrationOpEventProperties(t *testing.T) {
+	config := basicConfigWithoutPrivateAttrs()
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	now := ldtime.UnixMillisNow()
+
+	context := basicContext()
+	event := MigrationOpEventData{
+		BaseEvent: BaseEvent{
+			CreationDate: now,
+			Context:      context,
+		},
+		FlagKey:          "flag-key",
+		Default:          ldmigration.Off,
+		Op:               ldmigration.Write,
+		Evaluation:       ldreason.NewEvaluationDetail(ldvalue.Bool(true), 0, ldreason.NewEvalReasonFallthrough()),
+		SamplingRatio:    ldvalue.NewOptionalInt(100),
+		ConsistencyCheck: ldmigration.NewConsistencyCheck(true, 10),
+		Error:          map[ldmigration.Origin]bool{ldmigration.Old: true, ldmigration.New: false},
+		Latency:          map[ldmigration.Origin]int{ldmigration.Old: 300, ldmigration.New: 400},
+		CustomMeasurements: map[string]map[ldmigration.Origin]float64{
+			"custom-metric-1": {ldmigration.Old: 1.3, ldmigration.New: 4.3},
+			"custom-metric-2": {ldmigration.Old: 9.8, ldmigration.New: 7.6},
+		},
+	}
+	ep.RecordMigrationOpEvent(event)
+	ep.Flush()
+
+	assertEventsReceived(t, es, m.JSONEqual(map[string]interface{}{
+		"kind":          "migration_op",
+		"operation":     "write",
+		"creationDate":  now,
+		"samplingRatio": 100,
+		"contextKeys":   expectedContextKeys(context.context),
+		"evaluation": map[string]interface{}{
+			"key":       "flag-key",
+			"value":     ldvalue.Bool(true),
+			"variation": 0,
+			"reason":    ldreason.NewEvalReasonFallthrough(),
+			"default":   "off",
+		},
+		"measurements": []interface{}{
+			map[string]interface{}{
+				"key":           "consistent",
+				"samplingRatio": 10,
+				"value":         true,
+			},
+			map[string]interface{}{
+				"key": "latency_ms",
+				"values": map[string]interface{}{
+					"old": 300,
+					"new": 400,
+				},
+			},
+			map[string]interface{}{
+				"key": "error",
+				"values": map[string]interface{}{
+					"old": true,
+					"new": false,
+				},
+			},
+			map[string]interface{}{
+				"kind": "custom",
+				"key":  "custom-metric-1",
+				"values": map[string]interface{}{
+					"old": 1.3,
+					"new": 4.3,
+				},
+			},
+			map[string]interface{}{
+				"kind": "custom",
+				"key":  "custom-metric-2",
+				"values": map[string]interface{}{
+					"old": 9.8,
+					"new": 7.6,
+				},
+			},
+		},
+	}))
+	es.assertNoMoreEvents(t)
 }
 
 func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {

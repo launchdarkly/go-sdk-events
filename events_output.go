@@ -15,6 +15,7 @@ const (
 	FeatureDebugEventKind   = "debug"
 	CustomEventKind         = "custom"
 	IdentifyEventKind       = "identify"
+	MigrationOpEventKind    = "migration_op"
 	IndexEventKind          = "index"
 	SummaryEventKind        = "summary"
 )
@@ -88,6 +89,29 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 
+	case MigrationOpEventData:
+		beginEventFields(&obj, MigrationOpEventKind, evt.BaseEvent.CreationDate)
+
+		obj.Name("operation").String(string(evt.Op))
+
+		if v, ok := evt.SamplingRatio.Get(); ok {
+			obj.Name("samplingRatio").Int(v)
+		}
+
+		writeContextKeys(&obj, &evt.Context.context)
+
+		evalObj := obj.Name("evaluation").Object()
+		evalObj.Name("key").String(evt.FlagKey)
+		evt.Evaluation.Value.WriteToJSONWriter(evalObj.Name("value"))
+		evt.Evaluation.Reason.WriteToJSONWriter(evalObj.Name("reason"))
+		obj.Name("default").String(string(evt.Default))
+		evalObj.Maybe("variation", evt.Evaluation.VariationIndex.IsDefined()).Int(evt.Evaluation.VariationIndex.IntValue())
+		evalObj.End()
+
+		measurementsArr := obj.Name("measurements").Array()
+		writeMigrationOpMeasurements(&measurementsArr, evt)
+		measurementsArr.End()
+
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
@@ -99,6 +123,58 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime.UnixMillisecondTime) {
 	obj.Name("kind").String(kind)
 	obj.Name("creationDate").Float64(float64(creationDate))
+}
+
+func writeMigrationOpMeasurements(measurementsArr *jwriter.ArrayState, evt MigrationOpEventData) {
+	if check := evt.ConsistencyCheck; check != nil {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("consistent")
+		obj.Name("value").Bool(check.Consistent())
+		obj.Name("samplingRatio").Int(check.SamplingRatio())
+		obj.End()
+	}
+
+	if len(evt.Latency) > 0 {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("latency_ms")
+
+		valuesObj := obj.Name("values").Object()
+		for origin, value := range evt.Latency {
+			valuesObj.Name(string(origin)).Int(value)
+		}
+		valuesObj.End()
+
+		obj.End()
+	}
+
+	if len(evt.Error) > 0 {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("error")
+
+		valuesObj := obj.Name("values").Object()
+		for origin, value := range evt.Error {
+			valuesObj.Name(string(origin)).Bool(value)
+		}
+		valuesObj.End()
+
+		obj.End()
+	}
+
+	if len(evt.CustomMeasurements) > 0 {
+		for key, measurements := range evt.CustomMeasurements {
+			obj := measurementsArr.Object()
+			obj.Name("kind").String("custom")
+			obj.Name("key").String(key)
+
+			valuesObj := obj.Name("values").Object()
+			for origin, measurement := range measurements {
+				valuesObj.Name(string(origin)).Float64(measurement)
+			}
+			valuesObj.End()
+
+			obj.End()
+		}
+	}
 }
 
 func writeContextKeys(obj *jwriter.ObjectState, c *ldcontext.Context) {

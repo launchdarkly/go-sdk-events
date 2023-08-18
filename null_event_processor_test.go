@@ -15,6 +15,7 @@ func TestNullEventProcessor(t *testing.T) {
 	n.RecordEvaluation(defaultEventFactory.NewUnknownFlagEvaluationData("x", basicContext(), ldvalue.Null(),
 		ldreason.EvaluationReason{}))
 	n.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext()))
+	n.RecordMigrationOpEvent(MigrationOpEventData{})
 	n.RecordCustomEvent(defaultEventFactory.NewCustomEventData("x", basicContext(), ldvalue.Null(), false, 0))
 	n.RecordRawEvent([]byte("{}"))
 	n.Flush()
