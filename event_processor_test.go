@@ -121,12 +121,8 @@ func TestMigrationOpEventProperties(t *testing.T) {
 		Evaluation:       ldreason.NewEvaluationDetail(ldvalue.Bool(true), 0, ldreason.NewEvalReasonFallthrough()),
 		SamplingRatio:    ldvalue.NewOptionalInt(100),
 		ConsistencyCheck: ldmigration.NewConsistencyCheck(true, 10),
-		Error:          map[ldmigration.Origin]bool{ldmigration.Old: true, ldmigration.New: false},
+		Error:            map[ldmigration.Origin]bool{ldmigration.Old: true, ldmigration.New: false},
 		Latency:          map[ldmigration.Origin]int{ldmigration.Old: 300, ldmigration.New: 400},
-		CustomMeasurements: map[string]map[ldmigration.Origin]float64{
-			"custom-metric-1": {ldmigration.Old: 1.3, ldmigration.New: 4.3},
-			"custom-metric-2": {ldmigration.Old: 9.8, ldmigration.New: 7.6},
-		},
 	}
 	ep.RecordMigrationOpEvent(event)
 	ep.Flush()
@@ -162,22 +158,6 @@ func TestMigrationOpEventProperties(t *testing.T) {
 				"values": map[string]interface{}{
 					"old": true,
 					"new": false,
-				},
-			},
-			map[string]interface{}{
-				"kind": "custom",
-				"key":  "custom-metric-1",
-				"values": map[string]interface{}{
-					"old": 1.3,
-					"new": 4.3,
-				},
-			},
-			map[string]interface{}{
-				"kind": "custom",
-				"key":  "custom-metric-2",
-				"values": map[string]interface{}{
-					"old": 9.8,
-					"new": 7.6,
 				},
 			},
 		},

@@ -93,15 +93,14 @@ type IdentifyEventData struct {
 // through the SDK.
 type MigrationOpEventData struct {
 	BaseEvent
-	Op                 ldmigration.Operation
-	FlagKey            string
-	Evaluation         ldreason.EvaluationDetail
-	Default            ldmigration.Stage
-	SamplingRatio      ldvalue.OptionalInt
-	ConsistencyCheck   *ldmigration.ConsistencyCheck
-	Error              map[ldmigration.Origin]bool
-	Latency            map[ldmigration.Origin]int
-	CustomMeasurements map[string]map[ldmigration.Origin]float64
+	Op               ldmigration.Operation
+	FlagKey          string
+	Evaluation       ldreason.EvaluationDetail
+	Default          ldmigration.Stage
+	SamplingRatio    ldvalue.OptionalInt
+	ConsistencyCheck *ldmigration.ConsistencyCheck
+	Error            map[ldmigration.Origin]bool
+	Latency          map[ldmigration.Origin]int
 }
 
 // indexEvent is generated internally to capture user details from other events. It is an implementation

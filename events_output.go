@@ -159,22 +159,6 @@ func writeMigrationOpMeasurements(measurementsArr *jwriter.ArrayState, evt Migra
 
 		obj.End()
 	}
-
-	if len(evt.CustomMeasurements) > 0 {
-		for key, measurements := range evt.CustomMeasurements {
-			obj := measurementsArr.Object()
-			obj.Name("kind").String("custom")
-			obj.Name("key").String(key)
-
-			valuesObj := obj.Name("values").Object()
-			for origin, measurement := range measurements {
-				valuesObj.Name(string(origin)).Float64(measurement)
-			}
-			valuesObj.End()
-
-			obj.End()
-		}
-	}
 }
 
 func writeContextKeys(obj *jwriter.ObjectState, c *ldcontext.Context) {
