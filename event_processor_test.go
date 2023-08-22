@@ -121,7 +121,7 @@ func TestMigrationOpEventProperties(t *testing.T) {
 		Evaluation:       ldreason.NewEvaluationDetail(ldvalue.Bool(true), 0, ldreason.NewEvalReasonFallthrough()),
 		SamplingRatio:    ldvalue.NewOptionalInt(100),
 		ConsistencyCheck: ldmigration.NewConsistencyCheck(true, 10),
-		Error:            map[ldmigration.Origin]bool{ldmigration.Old: true, ldmigration.New: false},
+		Error:            map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
 		Latency:          map[ldmigration.Origin]int{ldmigration.Old: 300, ldmigration.New: 400},
 	}
 	ep.RecordMigrationOpEvent(event)
@@ -157,7 +157,6 @@ func TestMigrationOpEventProperties(t *testing.T) {
 				"key": "error",
 				"values": map[string]interface{}{
 					"old": true,
-					"new": false,
 				},
 			},
 		},

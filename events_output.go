@@ -152,8 +152,8 @@ func writeMigrationOpMeasurements(measurementsArr *jwriter.ArrayState, evt Migra
 		obj.Name("key").String("error")
 
 		valuesObj := obj.Name("values").Object()
-		for origin, value := range evt.Error {
-			valuesObj.Name(string(origin)).Bool(value)
+		for origin := range evt.Error {
+			valuesObj.Name(string(origin)).Bool(true)
 		}
 		valuesObj.End()
 

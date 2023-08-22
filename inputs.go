@@ -99,7 +99,7 @@ type MigrationOpEventData struct {
 	Default          ldmigration.Stage
 	SamplingRatio    ldvalue.OptionalInt
 	ConsistencyCheck *ldmigration.ConsistencyCheck
-	Error            map[ldmigration.Origin]bool
+	Error            map[ldmigration.Origin]struct{}
 	Latency          map[ldmigration.Origin]int
 }
 
