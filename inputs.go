@@ -111,6 +111,7 @@ type MigrationOpEventData struct {
 	Default          ldmigration.Stage
 	SamplingRatio    ldvalue.OptionalInt
 	ConsistencyCheck *ldmigration.ConsistencyCheck
+	Invoked          map[ldmigration.Origin]struct{}
 	Error            map[ldmigration.Origin]struct{}
 	Latency          map[ldmigration.Origin]int
 }

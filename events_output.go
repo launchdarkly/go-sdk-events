@@ -140,6 +140,18 @@ func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime
 }
 
 func writeMigrationOpMeasurements(measurementsArr *jwriter.ArrayState, evt MigrationOpEventData) {
+	if len(evt.Invoked) > 0 {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("invoked")
+
+		valuesObj := obj.Name("values").Object()
+		for origin := range evt.Invoked {
+			valuesObj.Name(string(origin)).Bool(true)
+		}
+		valuesObj.End()
+		obj.End()
+	}
+
 	if check := evt.ConsistencyCheck; check != nil {
 		obj := measurementsArr.Object()
 		obj.Name("key").String("consistent")

@@ -129,6 +129,7 @@ func TestMigrationOpEventProperties(t *testing.T) {
 		SamplingRatio:    ldvalue.NewOptionalInt(100),
 		ConsistencyCheck: ldmigration.NewConsistencyCheck(true, 10),
 		Error:            map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
+		Invoked:          map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
 		Latency:          map[ldmigration.Origin]int{ldmigration.Old: 300, ldmigration.New: 400},
 	}
 	ep.RecordMigrationOpEvent(event)
@@ -149,6 +150,12 @@ func TestMigrationOpEventProperties(t *testing.T) {
 		},
 		"measurements": []interface{}{
 			map[string]interface{}{
+				"key": "invoked",
+				"values": map[string]interface{}{
+					"old": true,
+				},
+			},
+			map[string]interface{}{
 				"key":           "consistent",
 				"samplingRatio": 10,
 				"value":         true,
@@ -164,6 +171,57 @@ func TestMigrationOpEventProperties(t *testing.T) {
 				"key": "error",
 				"values": map[string]interface{}{
 					"old": true,
+				},
+			},
+		},
+	}))
+	es.assertNoMoreEvents(t)
+}
+
+func TestMigrationOpEventPropertiesWithoutOptionalMeasurements(t *testing.T) {
+	config := basicConfigWithoutPrivateAttrs()
+	config.forceSampling = true
+
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	now := ldtime.UnixMillisNow()
+
+	context := basicContext()
+	event := MigrationOpEventData{
+		BaseEvent: BaseEvent{
+			CreationDate: now,
+			Context:      context,
+		},
+		FlagKey:       "flag-key",
+		Default:       ldmigration.Off,
+		Op:            ldmigration.Write,
+		Evaluation:    ldreason.NewEvaluationDetail(ldvalue.Bool(true), 0, ldreason.NewEvalReasonFallthrough()),
+		SamplingRatio: ldvalue.NewOptionalInt(100),
+		Invoked:       map[ldmigration.Origin]struct{}{ldmigration.Old: {}, ldmigration.New: {}},
+	}
+	ep.RecordMigrationOpEvent(event)
+	ep.Flush()
+
+	assertEventsReceived(t, es, m.JSONEqual(map[string]interface{}{
+		"kind":          "migration_op",
+		"operation":     "write",
+		"creationDate":  now,
+		"samplingRatio": 100,
+		"contextKeys":   expectedContextKeys(context.context),
+		"evaluation": map[string]interface{}{
+			"key":       "flag-key",
+			"value":     ldvalue.Bool(true),
+			"variation": 0,
+			"reason":    ldreason.NewEvalReasonFallthrough(),
+			"default":   "off",
+		},
+		"measurements": []interface{}{
+			map[string]interface{}{
+				"key": "invoked",
+				"values": map[string]interface{}{
+					"old": true,
+					"new": true,
 				},
 			},
 		},
@@ -192,6 +250,7 @@ func TestEventsCanBeDisabledThroughSamplingRatios(t *testing.T) {
 		SamplingRatio:    ldvalue.NewOptionalInt(0),
 		ConsistencyCheck: ldmigration.NewConsistencyCheck(true, 10),
 		Error:            map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
+		Invoked:          map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
 		Latency:          map[ldmigration.Origin]int{ldmigration.Old: 300, ldmigration.New: 400},
 	}
 	ep.RecordMigrationOpEvent(event)
