@@ -4,6 +4,7 @@ import (
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 // In this file we create the analytics event JSON data that we send to LaunchDarkly. This does not
@@ -76,6 +77,8 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 			evt.Reason.WriteToJSONWriter(obj.Name("reason"))
 		}
 
+		writeSamplingRatio(&obj, evt.SamplingRatio)
+
 	case CustomEventData:
 		beginEventFields(&obj, CustomEventKind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
@@ -85,19 +88,19 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		writeContextKeys(&obj, &evt.Context.context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
+		writeSamplingRatio(&obj, evt.SamplingRatio)
+
 	case IdentifyEventData:
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
+		writeSamplingRatio(&obj, evt.SamplingRatio)
 
 	case MigrationOpEventData:
 		beginEventFields(&obj, MigrationOpEventKind, evt.BaseEvent.CreationDate)
 
 		obj.Name("operation").String(string(evt.Op))
 
-		if v, ok := evt.SamplingRatio.Get(); ok {
-			obj.Name("samplingRatio").Int(v)
-		}
-
+		writeSamplingRatio(&obj, evt.SamplingRatio)
 		writeContextKeys(&obj, &evt.Context.context)
 
 		evalObj := obj.Name("evaluation").Object()
@@ -115,9 +118,20 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
+		writeSamplingRatio(&obj, evt.SamplingRatio)
 	}
 
 	obj.End()
+}
+
+func writeSamplingRatio(obj *jwriter.ObjectState, value ldvalue.OptionalInt) {
+	v, ok := value.Get()
+
+	if !ok || v == 1 {
+		return
+	}
+
+	obj.Name("samplingRatio").Int(v)
 }
 
 func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime.UnixMillisecondTime) {

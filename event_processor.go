@@ -2,6 +2,7 @@ package ldevents
 
 import (
 	"encoding/json"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -249,12 +250,13 @@ func (ed *eventDispatcher) runMainLoop(
 				return
 			}
 		case result := <-ed.senderResultCh:
-			if ed.disabled { // COVERAGE: no way to simulate in unit tests
+			switch {
+			case ed.disabled: // COVERAGE: no way to simulate in unit tests
 				continue
-			} else if result.MustShutDown {
+			case result.MustShutDown:
 				ed.disabled = true
 				ed.outbox.clear()
-			} else if result.TimeFromServer > 0 {
+			case result.TimeFromServer > 0:
 				ed.lastKnownPastTime = result.TimeFromServer
 			}
 		case <-flushTicker.C:
@@ -284,6 +286,9 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 		return
 	}
 
+	var indexSamplingRatio ldvalue.OptionalInt
+	var samplingRatio ldvalue.OptionalInt
+
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
@@ -293,9 +298,18 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
 	case EvaluationData:
+		indexSamplingRatio = evt.IndexSamplingRatio
+		samplingRatio = evt.SamplingRatio
+
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
-		ed.outbox.addToSummary(evt) // add all feature events to summaries
+
+		// add all feature events to summaries, provided we aren't specifically
+		// excluding them.
+		if !evt.ExcludeFromSummaries {
+			ed.outbox.addToSummary(evt)
+		}
+
 		willAddFullEvent = evt.RequireFullEvent
 		if ed.shouldDebugEvent(&evt) {
 			de := evt
@@ -303,12 +317,21 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			debugEvent = de
 		}
 	case IdentifyEventData:
+		samplingRatio = evt.SamplingRatio
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
 		inlinedUser = true
 	case CustomEventData:
+		samplingRatio = evt.SamplingRatio
+		indexSamplingRatio = evt.IndexSamplingRatio
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
+	case MigrationOpEventData:
+		if shouldSample(evt.SamplingRatio, ed.config.forceSampling) {
+			ed.outbox.addEvent(evt)
+		}
+		// We can halt execution here as a migration event shouldn't generate an index or debug event.
+		return
 	default:
 		ed.outbox.addEvent(evt)
 		return
@@ -319,17 +342,18 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
 			ed.deduplicatedContexts++
-		} else {
+		} else if shouldSample(indexSamplingRatio, ed.config.forceSampling) {
 			indexEvent := indexEvent{
 				BaseEvent{CreationDate: creationDate, Context: eventContext},
+				indexSamplingRatio,
 			}
 			ed.outbox.addEvent(indexEvent)
 		}
 	}
-	if willAddFullEvent {
+	if willAddFullEvent && shouldSample(samplingRatio, ed.config.forceSampling) {
 		ed.outbox.addEvent(evt)
 	}
-	if debugEvent != nil {
+	if debugEvent != nil && shouldSample(samplingRatio, ed.config.forceSampling) {
 		ed.outbox.addEvent(debugEvent)
 	}
 }
@@ -416,4 +440,22 @@ func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, f
 		}
 		workersGroup.Done() // Decrement the count of in-progress flushes
 	}
+}
+
+func shouldSample(ratio ldvalue.OptionalInt, forceSampling bool) bool {
+	if forceSampling {
+		return true
+	}
+
+	value, ok := ratio.Get()
+
+	if !ok || value == 1 {
+		return true
+	}
+
+	if value == 0 {
+		return false
+	}
+
+	return rand.Float64() < 1/float64(value) //nolint:gosec // COVERAGE: unit tests are not reliable with randomness
 }

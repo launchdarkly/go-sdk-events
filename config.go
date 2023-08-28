@@ -54,4 +54,6 @@ type EventsConfiguration struct {
 	currentTimeProvider func() ldtime.UnixMillisecondTime
 	// Used in testing to set a DiagnosticRecordingInterval that is less than the minimum.
 	forceDiagnosticRecordingInterval time.Duration
+	// Used in testing to override event sampling rules
+	forceSampling bool
 }
