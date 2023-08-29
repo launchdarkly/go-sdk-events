@@ -24,7 +24,7 @@ This major version release of `go-sdk-events` corresponds to the upcoming v6.0.0
 
 ### Changed:
 - The minimum Go version is now 1.18.
-- The package now uses a regular import path (`github.com/launchdarkly/go-sdk-events/v2`) rather than a `gopkg.in` path (`gopkg.in/launchdarkly/go-sdk-events.v1`).
+- The package now uses a regular import path (`github.com/launchdarkly/go-sdk-events/v3`) rather than a `gopkg.in` path (`gopkg.in/launchdarkly/go-sdk-events.v1`).
 - The dependency on `gopkg.in/launchdarkly/go-sdk-common.v2` has been changed to `github.com/launchdarkly/go-sdk-common/v3`.
 - Events now use the `ldcontext.Context` type rather than `lduser.User`.
 - Private attributes can now be designated with the `ldattr.Ref` type, which allows redaction of either a full attribute or a property within a JSON object value.

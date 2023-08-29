@@ -1,4 +1,4 @@
-module github.com/launchdarkly/go-sdk-events/v2
+module github.com/launchdarkly/go-sdk-events/v3
 
 go 1.18
 

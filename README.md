@@ -1,6 +1,6 @@
 # LaunchDarkly Go SDK Events Engine
 
-[![Circle CI](https://circleci.com/gh/launchdarkly/go-sdk-events.svg?style=svg)](https://circleci.com/gh/launchdarkly/go-sdk-events) [![Documentation](https://img.shields.io/static/v1?label=go.dev&message=reference&color=00add8)](https://pkg.go.dev/github.com/launchdarkly/go-sdk-events/v2)
+[![Circle CI](https://circleci.com/gh/launchdarkly/go-sdk-events.svg?style=svg)](https://circleci.com/gh/launchdarkly/go-sdk-events) [![Documentation](https://img.shields.io/static/v1?label=go.dev&message=reference&color=00add8)](https://pkg.go.dev/github.com/launchdarkly/go-sdk-events/v3)
 
 ## Overview
 
@@ -12,7 +12,7 @@ This version of the project requires a Go version of 1.18 or higher.
 
 ## Learn more
 
-Read our [documentation](http://docs.launchdarkly.com) for in-depth instructions on configuring and using LaunchDarkly. You can also head straight to the [complete reference guide for the Go SDK](http://docs.launchdarkly.com/docs/go-sdk-reference), or the [generated API documentation](https://pkg.go.dev.org/github.com/launchdarkly/go-sdk-events/v2) for this project.
+Read our [documentation](http://docs.launchdarkly.com) for in-depth instructions on configuring and using LaunchDarkly. You can also head straight to the [complete reference guide for the Go SDK](http://docs.launchdarkly.com/docs/go-sdk-reference), or the [generated API documentation](https://pkg.go.dev.org/github.com/launchdarkly/go-sdk-events/v3) for this project.
 
 ## Contributing
 

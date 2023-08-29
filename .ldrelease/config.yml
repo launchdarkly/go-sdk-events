@@ -17,5 +17,5 @@ branches:
     description: 1.x - for Go SDK 5+
 
 publications:
-  - url: https://godoc.org/github.com/launchdarkly/go-sdk-events/v2
+  - url: https://godoc.org/github.com/launchdarkly/go-sdk-events/v3
     description: documentation
