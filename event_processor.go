@@ -2,12 +2,12 @@ package ldevents
 
 import (
 	"encoding/json"
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldsampling"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
@@ -36,6 +36,7 @@ type eventDispatcher struct {
 	eventsInLastBatch    int
 	disabled             bool
 	currentTimestampFn   func() ldtime.UnixMillisecondTime
+	sampler              *ldsampling.RatioSampler
 }
 
 type flushPayload struct {
@@ -159,6 +160,7 @@ func startEventDispatcher(
 		workersGroup:       &sync.WaitGroup{},
 		userKeys:           newLruCache(config.UserKeysCapacity),
 		currentTimestampFn: config.currentTimeProvider,
+		sampler:            ldsampling.NewSampler(),
 	}
 
 	if ed.currentTimestampFn == nil {
@@ -327,7 +329,7 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
 	case MigrationOpEventData:
-		if shouldSample(evt.SamplingRatio, ed.config.forceSampling) {
+		if ed.shouldSample(evt.SamplingRatio) {
 			ed.outbox.addEvent(evt)
 		}
 		// We can halt execution here as a migration event shouldn't generate an index or debug event.
@@ -342,7 +344,7 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
 			ed.deduplicatedContexts++
-		} else if shouldSample(indexSamplingRatio, ed.config.forceSampling) {
+		} else if ed.shouldSample(indexSamplingRatio) {
 			indexEvent := indexEvent{
 				BaseEvent{CreationDate: creationDate, Context: eventContext},
 				indexSamplingRatio,
@@ -350,10 +352,10 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			ed.outbox.addEvent(indexEvent)
 		}
 	}
-	if willAddFullEvent && shouldSample(samplingRatio, ed.config.forceSampling) {
+	if willAddFullEvent && ed.shouldSample(samplingRatio) {
 		ed.outbox.addEvent(evt)
 	}
-	if debugEvent != nil && shouldSample(samplingRatio, ed.config.forceSampling) {
+	if debugEvent != nil && ed.shouldSample(samplingRatio) {
 		ed.outbox.addEvent(debugEvent)
 	}
 }
@@ -418,6 +420,14 @@ func (ed *eventDispatcher) sendDiagnosticsEvent(
 	}
 }
 
+func (ed *eventDispatcher) shouldSample(ratio ldvalue.OptionalInt) bool {
+	if ed.config.forceSampling {
+		return true
+	}
+
+	return ed.sampler.Sample(ratio.OrElse(1))
+}
+
 func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
 	workersGroup *sync.WaitGroup, senderResultCh chan<- EventSenderResult) {
 	for {
@@ -440,22 +450,4 @@ func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, f
 		}
 		workersGroup.Done() // Decrement the count of in-progress flushes
 	}
-}
-
-func shouldSample(ratio ldvalue.OptionalInt, forceSampling bool) bool {
-	if forceSampling {
-		return true
-	}
-
-	value, ok := ratio.Get()
-
-	if !ok || value == 1 {
-		return true
-	}
-
-	if value == 0 {
-		return false
-	}
-
-	return rand.Float64() < 1/float64(value) //nolint:gosec // COVERAGE: unit tests are not reliable with randomness
 }
