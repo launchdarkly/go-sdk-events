@@ -122,6 +122,7 @@ func TestMigrationOpEventProperties(t *testing.T) {
 			CreationDate: now,
 			Context:      context,
 		},
+		Version:          ldvalue.NewOptionalInt(3),
 		FlagKey:          "flag-key",
 		Default:          ldmigration.Off,
 		Op:               ldmigration.Write,
@@ -144,6 +145,7 @@ func TestMigrationOpEventProperties(t *testing.T) {
 		"evaluation": map[string]interface{}{
 			"key":       "flag-key",
 			"value":     ldvalue.Bool(true),
+			"version":   3,
 			"variation": 0,
 			"reason":    ldreason.NewEvalReasonFallthrough(),
 			"default":   "off",

@@ -109,6 +109,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		evt.Evaluation.Reason.WriteToJSONWriter(evalObj.Name("reason"))
 		obj.Name("default").String(string(evt.Default))
 		evalObj.Maybe("variation", evt.Evaluation.VariationIndex.IsDefined()).Int(evt.Evaluation.VariationIndex.IntValue())
+		evalObj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
 		evalObj.End()
 
 		measurementsArr := obj.Name("measurements").Array()

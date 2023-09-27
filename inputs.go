@@ -107,6 +107,7 @@ type MigrationOpEventData struct {
 	BaseEvent
 	Op               ldmigration.Operation
 	FlagKey          string
+	Version          ldvalue.OptionalInt
 	Evaluation       ldreason.EvaluationDetail
 	Default          ldmigration.Stage
 	SamplingRatio    ldvalue.OptionalInt
