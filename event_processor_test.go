@@ -67,7 +67,7 @@ func withFeatureEventOrCustomEvent(
 			func(ep EventProcessor, context EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
 				fe := defaultEventFactory.NewEvaluationData(
 					flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "",
-					ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false,
+					ldvalue.OptionalInt{}, false,
 				)
 				ep.RecordEvaluation(fe)
 				return fe, fe.CreationDate, nil
@@ -79,7 +79,7 @@ func withFeatureEventOrCustomEvent(
 		action(t,
 			func(ep EventProcessor, context EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher) {
 				ce := defaultEventFactory.NewCustomEventData(
-					"eventkey", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{},
+					"eventkey", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{},
 				)
 				ep.RecordCustomEvent(ce)
 				return ce, ce.CreationDate, []m.Matcher{anyCustomEvent()}
@@ -258,15 +258,16 @@ func TestEventsCanBeDisabledThroughSamplingRatios(t *testing.T) {
 	ep.RecordMigrationOpEvent(event)
 
 	data := ldvalue.ObjectBuild().SetString("thing", "stuff").Build()
-	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, false, 0, ldvalue.NewOptionalInt(0), ldvalue.NewOptionalInt(0))
+	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, false, 0, ldvalue.NewOptionalInt(0))
 	ep.RecordCustomEvent(ce)
 
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: ldtime.UnixMillisNow() + 1000000}
-	fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.NewOptionalInt(0), ldvalue.NewOptionalInt(0), false)
+	fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.NewOptionalInt(0), false)
 	ep.RecordEvaluation(fe)
 
 	ep.Flush()
 
+	// TODO: This is now going to generate at least 2 index events
 	es.assertNoMoreEvents(t)
 }
 
@@ -276,7 +277,7 @@ func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {
 		defer ep.Close()
 
 		flag := FlagEventProperties{Key: "flagkey", Version: 11}
-		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 		ep.RecordEvaluation(fe)
 		ep.Flush()
 
@@ -294,7 +295,7 @@ func TestFeatureEventCanBeExcludeFromSummaries(t *testing.T) {
 		defer ep.Close()
 
 		flag := FlagEventProperties{Key: "flagkey", Version: 11}
-		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, true)
+		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, true)
 		ep.RecordEvaluation(fe)
 		ep.Flush()
 
@@ -311,7 +312,7 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 		defer ep.Close()
 
 		flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
-		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 		ep.RecordEvaluation(fe)
 		ep.Flush()
 
@@ -428,7 +429,7 @@ func TestDebugEventProperties(t *testing.T) {
 
 		context := basicContext()
 		flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: ldtime.UnixMillisNow() + 1000000}
-		fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.NewOptionalInt(2), ldvalue.NewOptionalInt(3), false)
+		fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.NewOptionalInt(2), false)
 		ep.RecordEvaluation(fe)
 		ep.Flush()
 
@@ -441,32 +442,12 @@ func TestDebugEventProperties(t *testing.T) {
 	})
 }
 
-func TestDebugEventCanDisableIndexEvents(t *testing.T) {
-	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
-		ep, es := createEventProcessorAndSender(config)
-		defer ep.Close()
-
-		context := basicContext()
-		flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: ldtime.UnixMillisNow() + 1000000}
-		fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.NewOptionalInt(1), ldvalue.NewOptionalInt(0), false)
-		ep.RecordEvaluation(fe)
-		ep.Flush()
-
-		assertEventsReceived(t, es,
-			// no index event will occur
-			debugEventWithAllProperties(fe, flag, contextJSON(context, config)),
-			anySummaryEvent(),
-		)
-		es.assertNoMoreEvents(t)
-	})
-}
-
 func TestFeatureEventCanContainReason(t *testing.T) {
 	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
 	defer ep.Close()
 
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
-	fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+	fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	fe.Reason = ldreason.NewEvalReasonFallthrough()
 	ep.RecordEvaluation(fe)
 	ep.Flush()
@@ -491,7 +472,7 @@ func TestDebugEventIsAddedIfFlagIsTemporarilyInDebugMode(t *testing.T) {
 	context := basicContext()
 	futureTime := fakeTimeNow + 100
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: futureTime}
-	fe := eventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+	fe := eventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	ep.RecordEvaluation(fe)
 	ep.Flush()
 
@@ -515,7 +496,7 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 	context := basicContext()
 	futureTime := fakeTimeNow + 100
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true, DebugEventsUntilDate: futureTime}
-	fe := eventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+	fe := eventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	ep.RecordEvaluation(fe)
 	ep.Flush()
 
@@ -551,7 +532,7 @@ func TestDebugModeExpiresBasedOnClientTimeIfClientTimeIsLater(t *testing.T) {
 	// the future than the server time, but in the past compared to the client.
 	debugUntil := serverTime + 1000
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: debugUntil}
-	fe := eventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+	fe := eventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	ep.RecordEvaluation(fe)
 	ep.Flush()
 
@@ -583,7 +564,7 @@ func TestDebugModeExpiresBasedOnServerTimeIfServerTimeIsLater(t *testing.T) {
 	// the future than the client time, but in the past compared to the server.
 	debugUntil := serverTime - 1000
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: debugUntil}
-	fe := eventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+	fe := eventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	ep.RecordEvaluation(fe)
 	ep.Flush()
 
@@ -601,9 +582,9 @@ func TestNonTrackedEventsAreSummarized(t *testing.T) {
 	flag2 := FlagEventProperties{Key: "flagkey2", Version: 22}
 	flag1Eval := ldreason.NewEvaluationDetail(ldvalue.String("value1"), 2, noReason)
 	flag2Eval := ldreason.NewEvaluationDetail(ldvalue.String("value2"), 3, noReason)
-	fe1 := defaultEventFactory.NewEvaluationData(flag1, context, flag1Eval, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
-	fe2 := defaultEventFactory.NewEvaluationData(flag2, context, flag2Eval, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
-	fe3 := defaultEventFactory.NewEvaluationData(flag2, context, flag2Eval, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false)
+	fe1 := defaultEventFactory.NewEvaluationData(flag1, context, flag1Eval, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	fe2 := defaultEventFactory.NewEvaluationData(flag2, context, flag2Eval, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	fe3 := defaultEventFactory.NewEvaluationData(flag2, context, flag2Eval, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	ep.RecordEvaluation(fe1)
 	ep.RecordEvaluation(fe2)
 	ep.RecordEvaluation(fe3)
@@ -629,7 +610,7 @@ func TestCustomEventProperties(t *testing.T) {
 
 	context := basicContext()
 	data := ldvalue.ObjectBuild().SetString("thing", "stuff").Build()
-	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, false, 0, ldvalue.NewOptionalInt(2), ldvalue.NewOptionalInt(3))
+	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, false, 0, ldvalue.NewOptionalInt(2))
 	ep.RecordCustomEvent(ce)
 	ep.Flush()
 
@@ -648,28 +629,6 @@ func TestCustomEventProperties(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
-func TestCustomEventCanDisableOnlyIndex(t *testing.T) {
-	config := basicConfigWithoutPrivateAttrs()
-	ep, es := createEventProcessorAndSender(config)
-	defer ep.Close()
-
-	context := basicContext()
-	data := ldvalue.ObjectBuild().SetString("thing", "stuff").Build()
-	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, false, 0, ldvalue.NewOptionalInt(1), ldvalue.NewOptionalInt(0))
-	ep.RecordCustomEvent(ce)
-	ep.Flush()
-
-	customEventMatcher := m.JSONEqual(map[string]interface{}{
-		"kind":         "custom",
-		"creationDate": ce.CreationDate,
-		"key":          ce.Key,
-		"data":         data,
-		"contextKeys":  expectedContextKeys(context.context),
-	})
-	assertEventsReceived(t, es, customEventMatcher)
-	es.assertNoMoreEvents(t)
-}
-
 func TestCustomEventCanHaveMetricValue(t *testing.T) {
 	config := basicConfigWithoutPrivateAttrs()
 	ep, es := createEventProcessorAndSender(config)
@@ -678,7 +637,7 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 	context := basicContext()
 	data := ldvalue.ObjectBuild().SetString("thing", "stuff").Build()
 	metric := float64(2.5)
-	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, true, metric, ldvalue.OptionalInt{}, ldvalue.OptionalInt{})
+	ce := defaultEventFactory.NewCustomEventData("eventkey", context, data, true, metric, ldvalue.OptionalInt{})
 	ep.RecordCustomEvent(ce)
 	ep.Flush()
 
@@ -816,8 +775,8 @@ func TestPeriodicUserKeysFlush(t *testing.T) {
 	defer ep.Close()
 
 	context := basicContext()
-	event1 := defaultEventFactory.NewCustomEventData("event1", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{})
-	event2 := defaultEventFactory.NewCustomEventData("event2", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{})
+	event1 := defaultEventFactory.NewCustomEventData("event1", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{})
+	event2 := defaultEventFactory.NewCustomEventData("event2", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{})
 	ep.RecordCustomEvent(event1)
 	ep.RecordCustomEvent(event2)
 	ep.Flush()
@@ -834,7 +793,7 @@ func TestPeriodicUserKeysFlush(t *testing.T) {
 	<-time.After(200 * time.Millisecond)
 
 	// Referencing the same context in a new event should produce a new index event
-	event3 := defaultEventFactory.NewCustomEventData("event3", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{})
+	event3 := defaultEventFactory.NewCustomEventData("event3", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{})
 	ep.RecordCustomEvent(event3)
 	ep.Flush()
 	assertEventsReceived(t, es,
@@ -932,9 +891,9 @@ func TestDiagnosticPeriodicEventHasEventCounters(t *testing.T) {
 	m.In(t).Assert(initEvent, eventKindIs("diagnostic-init"))
 
 	context := Context(lduser.NewUser("userkey"))
-	ep.RecordCustomEvent(defaultEventFactory.NewCustomEventData("key", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{}))
-	ep.RecordCustomEvent(defaultEventFactory.NewCustomEventData("key", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{}))
-	ep.RecordCustomEvent(defaultEventFactory.NewCustomEventData("key", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{}))
+	ep.RecordCustomEvent(defaultEventFactory.NewCustomEventData("key", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}))
+	ep.RecordCustomEvent(defaultEventFactory.NewCustomEventData("key", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}))
+	ep.RecordCustomEvent(defaultEventFactory.NewCustomEventData("key", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{}))
 	ep.Flush()
 
 	periodicEventGate <- struct{}{} // periodic event won't be sent until we do this

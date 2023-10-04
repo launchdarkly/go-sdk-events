@@ -81,15 +81,15 @@ func BenchmarkEventOutputSummaryMultipleCounters(b *testing.B) {
 
 	es := newEventSummarizer()
 	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		false, flag1Default, "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false))
+		false, flag1Default, "", ldvalue.OptionalInt{}, false))
 	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-		false, flag1Default, "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false))
+		false, flag1Default, "", ldvalue.OptionalInt{}, false))
 	es.summarizeEvent(factory.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		false, flag1Default, "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false))
+		false, flag1Default, "", ldvalue.OptionalInt{}, false))
 	es.summarizeEvent(factory.NewEvaluationData(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-		false, flag1Default, "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false))
+		false, flag1Default, "", ldvalue.OptionalInt{}, false))
 	es.summarizeEvent(factory.NewEvaluationData(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-		false, flag2Default, "", ldvalue.OptionalInt{}, ldvalue.OptionalInt{}, false))
+		false, flag2Default, "", ldvalue.OptionalInt{}, false))
 	summary := es.snapshot()
 
 	b.ResetTimer()

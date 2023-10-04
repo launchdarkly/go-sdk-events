@@ -13,10 +13,10 @@ func TestNullEventProcessor(t *testing.T) {
 	// Just verifies that these methods don't panic
 	n := NewNullEventProcessor()
 	n.RecordEvaluation(defaultEventFactory.NewUnknownFlagEvaluationData("x", basicContext(), ldvalue.Null(),
-		ldreason.EvaluationReason{}, ldvalue.OptionalInt{}))
+		ldreason.EvaluationReason{}))
 	n.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext(), ldvalue.OptionalInt{}))
 	n.RecordMigrationOpEvent(MigrationOpEventData{})
-	n.RecordCustomEvent(defaultEventFactory.NewCustomEventData("x", basicContext(), ldvalue.Null(), false, 0, ldvalue.OptionalInt{}, ldvalue.OptionalInt{}))
+	n.RecordCustomEvent(defaultEventFactory.NewCustomEventData("x", basicContext(), ldvalue.Null(), false, 0, ldvalue.OptionalInt{}))
 	n.RecordRawEvent([]byte("{}"))
 	n.Flush()
 	n.FlushBlocking(0)

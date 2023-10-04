@@ -119,7 +119,6 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
-		writeSamplingRatio(&obj, evt.SamplingRatio)
 	}
 
 	obj.End()

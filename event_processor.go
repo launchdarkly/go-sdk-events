@@ -288,7 +288,6 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 		return
 	}
 
-	var indexSamplingRatio ldvalue.OptionalInt
 	var samplingRatio ldvalue.OptionalInt
 
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
@@ -300,7 +299,6 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
 	case EvaluationData:
-		indexSamplingRatio = evt.IndexSamplingRatio
 		samplingRatio = evt.SamplingRatio
 
 		eventContext = evt.Context
@@ -325,7 +323,6 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 		inlinedUser = true
 	case CustomEventData:
 		samplingRatio = evt.SamplingRatio
-		indexSamplingRatio = evt.IndexSamplingRatio
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
 	case MigrationOpEventData:
@@ -344,10 +341,9 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	if !(willAddFullEvent && inlinedUser) {
 		if alreadySeenUser {
 			ed.deduplicatedContexts++
-		} else if ed.shouldSample(indexSamplingRatio) {
+		} else {
 			indexEvent := indexEvent{
 				BaseEvent{CreationDate: creationDate, Context: eventContext},
-				indexSamplingRatio,
 			}
 			ed.outbox.addEvent(indexEvent)
 		}
