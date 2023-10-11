@@ -4,6 +4,7 @@ import (
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 // In this file we create the analytics event JSON data that we send to LaunchDarkly. This does not
@@ -15,6 +16,7 @@ const (
 	FeatureDebugEventKind   = "debug"
 	CustomEventKind         = "custom"
 	IdentifyEventKind       = "identify"
+	MigrationOpEventKind    = "migration_op"
 	IndexEventKind          = "index"
 	SummaryEventKind        = "summary"
 )
@@ -75,6 +77,8 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 			evt.Reason.WriteToJSONWriter(obj.Name("reason"))
 		}
 
+		writeSamplingRatio(&obj, evt.SamplingRatio)
+
 	case CustomEventData:
 		beginEventFields(&obj, CustomEventKind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
@@ -84,9 +88,33 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		writeContextKeys(&obj, &evt.Context.context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
+		writeSamplingRatio(&obj, evt.SamplingRatio)
+
 	case IdentifyEventData:
 		beginEventFields(&obj, IdentifyEventKind, evt.BaseEvent.CreationDate)
 		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
+		writeSamplingRatio(&obj, evt.SamplingRatio)
+
+	case MigrationOpEventData:
+		beginEventFields(&obj, MigrationOpEventKind, evt.BaseEvent.CreationDate)
+
+		obj.Name("operation").String(string(evt.Op))
+
+		writeSamplingRatio(&obj, evt.SamplingRatio)
+		writeContextKeys(&obj, &evt.Context.context)
+
+		evalObj := obj.Name("evaluation").Object()
+		evalObj.Name("key").String(evt.FlagKey)
+		evt.Evaluation.Value.WriteToJSONWriter(evalObj.Name("value"))
+		evt.Evaluation.Reason.WriteToJSONWriter(evalObj.Name("reason"))
+		obj.Name("default").String(string(evt.Default))
+		evalObj.Maybe("variation", evt.Evaluation.VariationIndex.IsDefined()).Int(evt.Evaluation.VariationIndex.IntValue())
+		evalObj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
+		evalObj.End()
+
+		measurementsArr := obj.Name("measurements").Array()
+		writeMigrationOpMeasurements(&measurementsArr, evt)
+		measurementsArr.End()
 
 	case indexEvent:
 		beginEventFields(&obj, IndexEventKind, evt.BaseEvent.CreationDate)
@@ -96,9 +124,67 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 	obj.End()
 }
 
+func writeSamplingRatio(obj *jwriter.ObjectState, value ldvalue.OptionalInt) {
+	v, ok := value.Get()
+
+	if !ok || v == 1 {
+		return
+	}
+
+	obj.Name("samplingRatio").Int(v)
+}
+
 func beginEventFields(obj *jwriter.ObjectState, kind string, creationDate ldtime.UnixMillisecondTime) {
 	obj.Name("kind").String(kind)
 	obj.Name("creationDate").Float64(float64(creationDate))
+}
+
+func writeMigrationOpMeasurements(measurementsArr *jwriter.ArrayState, evt MigrationOpEventData) {
+	if len(evt.Invoked) > 0 {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("invoked")
+
+		valuesObj := obj.Name("values").Object()
+		for origin := range evt.Invoked {
+			valuesObj.Name(string(origin)).Bool(true)
+		}
+		valuesObj.End()
+		obj.End()
+	}
+
+	if check := evt.ConsistencyCheck; check != nil {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("consistent")
+		obj.Name("value").Bool(check.Consistent())
+		obj.Name("samplingRatio").Int(check.SamplingRatio())
+		obj.End()
+	}
+
+	if len(evt.Latency) > 0 {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("latency_ms")
+
+		valuesObj := obj.Name("values").Object()
+		for origin, value := range evt.Latency {
+			valuesObj.Name(string(origin)).Int(value)
+		}
+		valuesObj.End()
+
+		obj.End()
+	}
+
+	if len(evt.Error) > 0 {
+		obj := measurementsArr.Object()
+		obj.Name("key").String("error")
+
+		valuesObj := obj.Name("values").Object()
+		for origin := range evt.Error {
+			valuesObj.Name(string(origin)).Bool(true)
+		}
+		valuesObj.End()
+
+		obj.End()
+	}
 }
 
 func writeContextKeys(obj *jwriter.ObjectState, c *ldcontext.Context) {

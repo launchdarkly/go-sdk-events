@@ -93,6 +93,9 @@ func matchFeatureOrDebugEvent(sourceEvent EvaluationData, flag FlagEventProperti
 	} else {
 		props["context"] = inlineContext
 	}
+	if v, ok := sourceEvent.SamplingRatio.Get(); ok && v != 1 {
+		props["samplingRatio"] = v
+	}
 	return m.JSONEqual(props)
 }
 
