@@ -30,25 +30,26 @@ func TestEventFactory(t *testing.T) {
 				CreationDate: fakeTime,
 				Context:      context,
 			},
-			Key:       flag.Key,
-			Version:   ldvalue.NewOptionalInt(flag.Version),
-			Variation: ldvalue.NewOptionalInt(1),
-			Value:     ldvalue.String("value"),
-			Default:   ldvalue.String("default"),
-			Reason:    ldreason.NewEvalReasonFallthrough(),
-			PrereqOf:  ldvalue.NewOptionalString("pre"),
+			Key:           flag.Key,
+			Version:       ldvalue.NewOptionalInt(flag.Version),
+			Variation:     ldvalue.NewOptionalInt(1),
+			Value:         ldvalue.String("value"),
+			Default:       ldvalue.String("default"),
+			Reason:        ldreason.NewEvalReasonFallthrough(),
+			PrereqOf:      ldvalue.NewOptionalString("pre"),
+			SamplingRatio: ldvalue.NewOptionalInt(2),
 		}
 
 		event1 := withoutReasons.NewEvaluationData(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
-			false, expected.Default, "pre")
+			false, expected.Default, "pre", ldvalue.NewOptionalInt(2), false)
 		assert.Equal(t, ldreason.EvaluationReason{}, event1.Reason)
 		event1.Reason = expected.Reason
 		assert.Equal(t, expected, event1)
 
 		event2 := withReasons.NewEvaluationData(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), expected.Reason),
-			false, expected.Default, "pre")
+			false, expected.Default, "pre", ldvalue.NewOptionalInt(2), false)
 		assert.Equal(t, expected, event2)
 	})
 
@@ -60,11 +61,12 @@ func TestEventFactory(t *testing.T) {
 				CreationDate: fakeTime,
 				Context:      context,
 			},
-			Key:       flag.Key,
-			Version:   ldvalue.NewOptionalInt(flag.Version),
-			Variation: ldvalue.NewOptionalInt(1),
-			Value:     ldvalue.String("value"),
-			Default:   ldvalue.String("default"),
+			Key:                flag.Key,
+			Version:            ldvalue.NewOptionalInt(flag.Version),
+			Variation:          ldvalue.NewOptionalInt(1),
+			Value:              ldvalue.String("value"),
+			Default:            ldvalue.String("default"),
+			SamplingRatio:      ldvalue.NewOptionalInt(2),
 		}
 
 		flag1 := flag
@@ -73,7 +75,7 @@ func TestEventFactory(t *testing.T) {
 		expected1.RequireFullEvent = true
 		event1 := withoutReasons.NewEvaluationData(flag1, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
-			false, expected.Default, "")
+			false, expected.Default, "", ldvalue.NewOptionalInt(2), false)
 		assert.Equal(t, expected1, event1)
 
 		flag2 := flag
@@ -82,7 +84,7 @@ func TestEventFactory(t *testing.T) {
 		expected2.DebugEventsUntilDate = flag2.DebugEventsUntilDate
 		event2 := withoutReasons.NewEvaluationData(flag2, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
-			false, expected.Default, "")
+			false, expected.Default, "", ldvalue.NewOptionalInt(2), false)
 		assert.Equal(t, expected2, event2)
 	})
 
@@ -105,7 +107,7 @@ func TestEventFactory(t *testing.T) {
 
 		event := withoutReasons.NewEvaluationData(flag, context,
 			ldreason.NewEvaluationDetail(expected.Value, expected.Variation.IntValue(), ldreason.NewEvalReasonFallthrough()),
-			true, expected.Default, "")
+			true, expected.Default, "", ldvalue.OptionalInt{}, false)
 		assert.Equal(t, expected, event)
 	})
 
@@ -143,7 +145,7 @@ func TestEventFactory(t *testing.T) {
 			MetricValue: 2,
 		}
 
-		event := withoutReasons.NewCustomEventData(expected.Key, context, expected.Data, true, expected.MetricValue)
+		event := withoutReasons.NewCustomEventData(expected.Key, context, expected.Data, true, expected.MetricValue, ldvalue.OptionalInt{})
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.CreationDate)
 	})
@@ -156,7 +158,7 @@ func TestEventFactory(t *testing.T) {
 			},
 		}
 
-		event := withoutReasons.NewIdentifyEventData(context)
+		event := withoutReasons.NewIdentifyEventData(context, ldvalue.OptionalInt{})
 		assert.Equal(t, expected, event)
 		assert.Equal(t, expected.BaseEvent.CreationDate, event.CreationDate)
 	})

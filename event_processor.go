@@ -7,6 +7,7 @@ import (
 
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldsampling"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
@@ -35,6 +36,7 @@ type eventDispatcher struct {
 	eventsInLastBatch    int
 	disabled             bool
 	currentTimestampFn   func() ldtime.UnixMillisecondTime
+	sampler              *ldsampling.RatioSampler
 }
 
 type flushPayload struct {
@@ -85,6 +87,10 @@ func (ep *defaultEventProcessor) RecordIdentifyEvent(e IdentifyEventData) {
 }
 
 func (ep *defaultEventProcessor) RecordCustomEvent(e CustomEventData) {
+	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
+}
+
+func (ep *defaultEventProcessor) RecordMigrationOpEvent(e MigrationOpEventData) {
 	ep.postNonBlockingMessageToInbox(sendEventMessage{event: e})
 }
 
@@ -154,6 +160,7 @@ func startEventDispatcher(
 		workersGroup:       &sync.WaitGroup{},
 		userKeys:           newLruCache(config.UserKeysCapacity),
 		currentTimestampFn: config.currentTimeProvider,
+		sampler:            ldsampling.NewSampler(),
 	}
 
 	if ed.currentTimestampFn == nil {
@@ -245,12 +252,13 @@ func (ed *eventDispatcher) runMainLoop(
 				return
 			}
 		case result := <-ed.senderResultCh:
-			if ed.disabled { // COVERAGE: no way to simulate in unit tests
+			switch {
+			case ed.disabled: // COVERAGE: no way to simulate in unit tests
 				continue
-			} else if result.MustShutDown {
+			case result.MustShutDown:
 				ed.disabled = true
 				ed.outbox.clear()
-			} else if result.TimeFromServer > 0 {
+			case result.TimeFromServer > 0:
 				ed.lastKnownPastTime = result.TimeFromServer
 			}
 		case <-flushTicker.C:
@@ -280,6 +288,8 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 		return
 	}
 
+	var samplingRatio ldvalue.OptionalInt
+
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
@@ -289,9 +299,17 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
 	case EvaluationData:
+		samplingRatio = evt.SamplingRatio
+
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
-		ed.outbox.addToSummary(evt) // add all feature events to summaries
+
+		// add all feature events to summaries, provided we aren't specifically
+		// excluding them.
+		if !evt.ExcludeFromSummaries {
+			ed.outbox.addToSummary(evt)
+		}
+
 		willAddFullEvent = evt.RequireFullEvent
 		if ed.shouldDebugEvent(&evt) {
 			de := evt
@@ -299,12 +317,20 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			debugEvent = de
 		}
 	case IdentifyEventData:
+		samplingRatio = evt.SamplingRatio
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
 		inlinedUser = true
 	case CustomEventData:
+		samplingRatio = evt.SamplingRatio
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
+	case MigrationOpEventData:
+		if ed.shouldSample(evt.SamplingRatio) {
+			ed.outbox.addEvent(evt)
+		}
+		// We can halt execution here as a migration event shouldn't generate an index or debug event.
+		return
 	default:
 		ed.outbox.addEvent(evt)
 		return
@@ -322,10 +348,10 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			ed.outbox.addEvent(indexEvent)
 		}
 	}
-	if willAddFullEvent {
+	if willAddFullEvent && ed.shouldSample(samplingRatio) {
 		ed.outbox.addEvent(evt)
 	}
-	if debugEvent != nil {
+	if debugEvent != nil && ed.shouldSample(samplingRatio) {
 		ed.outbox.addEvent(debugEvent)
 	}
 }
@@ -388,6 +414,14 @@ func (ed *eventDispatcher) sendDiagnosticsEvent(
 		// data to cause any kind of back-pressure.
 		ed.workersGroup.Done() // COVERAGE: no way to simulate this condition in unit tests
 	}
+}
+
+func (ed *eventDispatcher) shouldSample(ratio ldvalue.OptionalInt) bool {
+	if ed.config.forceSampling {
+		return true
+	}
+
+	return ed.sampler.Sample(ratio.OrElse(1))
 }
 
 func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,

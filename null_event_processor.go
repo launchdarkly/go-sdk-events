@@ -12,13 +12,15 @@ func NewNullEventProcessor() EventProcessor {
 	return nullEventProcessor{}
 }
 
-func (n nullEventProcessor) RecordEvaluation(ed EvaluationData) {}
+func (n nullEventProcessor) RecordEvaluation(EvaluationData) {}
 
-func (n nullEventProcessor) RecordIdentifyEvent(e IdentifyEventData) {}
+func (n nullEventProcessor) RecordIdentifyEvent(IdentifyEventData) {}
 
-func (n nullEventProcessor) RecordCustomEvent(e CustomEventData) {}
+func (n nullEventProcessor) RecordCustomEvent(CustomEventData) {}
 
-func (n nullEventProcessor) RecordRawEvent(data json.RawMessage) {}
+func (n nullEventProcessor) RecordMigrationOpEvent(MigrationOpEventData) {}
+
+func (n nullEventProcessor) RecordRawEvent(json.RawMessage) {}
 
 func (n nullEventProcessor) Flush() {}
 

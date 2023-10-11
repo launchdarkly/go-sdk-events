@@ -62,7 +62,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 		t.Run("feature", func(t *testing.T) {
 			event1 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-				false, ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false)
 			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "feature",
@@ -77,7 +77,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 
 			event1r := withReasons.NewEvaluationData(flag, context,
 				ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, ldreason.NewEvalReasonFallthrough()),
-				false, ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false)
 			verifyEventOutput(t, formatter, event1r,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "feature",
@@ -92,7 +92,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 				}))
 
 			event2 := withoutReasons.NewEvaluationData(flag, context, ldreason.EvaluationDetail{Value: ldvalue.String("v")},
-				false, ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false)
 			event2.Variation = ldvalue.OptionalInt{}
 			verifyEventOutput(t, formatter, event2,
 				m.JSONEqual(map[string]interface{}{
@@ -106,7 +106,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 				}))
 
 			event3 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-				false, ldvalue.String("dv"), "pre")
+				false, ldvalue.String("dv"), "pre", ldvalue.OptionalInt{}, false)
 			verifyEventOutput(t, formatter, event3,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "feature",
@@ -131,11 +131,58 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"value":        "dv",
 					"default":      "dv",
 				}))
+
+			// A sampling ratio of 1 will not appear in the JSON output
+			event5 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "", ldvalue.NewOptionalInt(1), false)
+			verifyEventOutput(t, formatter, event5,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "feature",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"contextKeys":  contextKeys,
+					"variation":    1,
+					"value":        "v",
+					"default":      "dv",
+				}))
+
+			// We should explicitly include the sampling ratio when specified to something other than 1
+			event6 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "", ldvalue.NewOptionalInt(10), false)
+			verifyEventOutput(t, formatter, event6,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "feature",
+					"creationDate":  fakeTime,
+					"key":           flag.Key,
+					"version":       flag.Version,
+					"contextKeys":   contextKeys,
+					"samplingRatio": 10,
+					"variation":     1,
+					"value":         "v",
+					"default":       "dv",
+				}))
+
+			// This includes when the sampling ratio is 0
+			event7 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "", ldvalue.NewOptionalInt(0), false)
+			verifyEventOutput(t, formatter, event7,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "feature",
+					"creationDate":  fakeTime,
+					"key":           flag.Key,
+					"version":       flag.Version,
+					"contextKeys":   contextKeys,
+					"samplingRatio": 0,
+					"variation":     1,
+					"value":         "v",
+					"default":       "dv",
+				}))
 		})
 
 		t.Run("debug", func(t *testing.T) {
 			event1 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-				false, ldvalue.String("dv"), "")
+				false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false)
 			event1.debug = true
 			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
@@ -148,20 +195,99 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"value":        "v",
 					"default":      "dv",
 				}))
+
+			// A sampling ratio of 1 will not appear in the JSON output
+			event2 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "", ldvalue.NewOptionalInt(1), false)
+			event2.debug = true
+			verifyEventOutput(t, formatter, event2,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "debug",
+					"creationDate": fakeTime,
+					"key":          flag.Key,
+					"version":      flag.Version,
+					"context":      contextJSON,
+					"variation":    1,
+					"value":        "v",
+					"default":      "dv",
+				}))
+
+			// We should explicitly include the sampling ratio when specified to something other than 1
+			event3 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "", ldvalue.NewOptionalInt(10), false)
+			event3.debug = true
+			verifyEventOutput(t, formatter, event3,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "debug",
+					"creationDate":  fakeTime,
+					"key":           flag.Key,
+					"version":       flag.Version,
+					"context":       contextJSON,
+					"samplingRatio": 10,
+					"variation":     1,
+					"value":         "v",
+					"default":       "dv",
+				}))
+
+			// This includes when the sampling ratio is 0
+			event4 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+				false, ldvalue.String("dv"), "", ldvalue.NewOptionalInt(0), false)
+			event4.debug = true
+			verifyEventOutput(t, formatter, event4,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "debug",
+					"creationDate":  fakeTime,
+					"key":           flag.Key,
+					"version":       flag.Version,
+					"context":       contextJSON,
+					"samplingRatio": 0,
+					"variation":     1,
+					"value":         "v",
+					"default":       "dv",
+				}))
 		})
 
 		t.Run("identify", func(t *testing.T) {
-			event := withoutReasons.NewIdentifyEventData(context)
-			verifyEventOutput(t, formatter, event,
+			event1 := withoutReasons.NewIdentifyEventData(context, ldvalue.OptionalInt{})
+			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "identify",
 					"creationDate": fakeTime,
 					"context":      contextJSON,
 				}))
+
+			// A sampling ratio of 1 will not appear in the JSON output
+			event2 := withoutReasons.NewIdentifyEventData(context, ldvalue.NewOptionalInt(1))
+			verifyEventOutput(t, formatter, event2,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "identify",
+					"creationDate": fakeTime,
+					"context":      contextJSON,
+				}))
+
+			// We should explicitly include the sampling ratio when specified to something other than 1
+			event3 := withoutReasons.NewIdentifyEventData(context, ldvalue.NewOptionalInt(10))
+			verifyEventOutput(t, formatter, event3,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "identify",
+					"creationDate":  fakeTime,
+					"context":       contextJSON,
+					"samplingRatio": 10,
+				}))
+
+			// This includes when the sampling ratio is 0
+			event4 := withoutReasons.NewIdentifyEventData(context, ldvalue.NewOptionalInt(0))
+			verifyEventOutput(t, formatter, event4,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "identify",
+					"creationDate":  fakeTime,
+					"context":       contextJSON,
+					"samplingRatio": 0,
+				}))
 		})
 
 		t.Run("custom", func(t *testing.T) {
-			event1 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0)
+			event1 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{})
 			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "custom",
@@ -170,7 +296,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"contextKeys":  contextKeys,
 				}))
 
-			event2 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.String("d"), false, 0)
+			event2 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.String("d"), false, 0, ldvalue.OptionalInt{})
 			verifyEventOutput(t, formatter, event2,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "custom",
@@ -180,7 +306,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"data":         "d",
 				}))
 
-			event3 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), true, 2.5)
+			event3 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), true, 2.5, ldvalue.OptionalInt{})
 			verifyEventOutput(t, formatter, event3,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "custom",
@@ -189,11 +315,43 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"contextKeys":  contextKeys,
 					"metricValue":  2.5,
 				}))
+
+			// A sampling ratio of 1 will not appear in the JSON output
+			event4 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0, ldvalue.NewOptionalInt(1))
+			verifyEventOutput(t, formatter, event4,
+				m.JSONEqual(map[string]interface{}{
+					"kind":         "custom",
+					"key":          "eventkey",
+					"creationDate": fakeTime,
+					"contextKeys":  contextKeys,
+				}))
+
+			// We should explicitly include the sampling ratio when specified to something other than 1
+			event5 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0, ldvalue.NewOptionalInt(10))
+			verifyEventOutput(t, formatter, event5,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "custom",
+					"key":           "eventkey",
+					"creationDate":  fakeTime,
+					"contextKeys":   contextKeys,
+					"samplingRatio": 10,
+				}))
+
+			// This includes when the sampling ratio is 0
+			event6 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.Null(), false, 0, ldvalue.NewOptionalInt(0))
+			verifyEventOutput(t, formatter, event6,
+				m.JSONEqual(map[string]interface{}{
+					"kind":          "custom",
+					"key":           "eventkey",
+					"creationDate":  fakeTime,
+					"contextKeys":   contextKeys,
+					"samplingRatio": 0,
+				}))
 		})
 
 		t.Run("index", func(t *testing.T) {
-			event := indexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, Context: context}}
-			verifyEventOutput(t, formatter, event,
+			event1 := indexEvent{BaseEvent: BaseEvent{CreationDate: fakeTime, Context: context}}
+			verifyEventOutput(t, formatter, event1,
 				m.JSONEqual(map[string]interface{}{
 					"kind":         "index",
 					"creationDate": fakeTime,
@@ -225,7 +383,7 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	t.Run("summary - single flag, single counter", func(t *testing.T) {
 		es1 := newEventSummarizer()
 		event1 := withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
-			false, ldvalue.String("dv"), "")
+			false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false)
 		es1.summarizeEvent(event1)
 		verifySummaryEventOutput(t, formatter, es1.snapshot(),
 			m.JSONEqual(map[string]interface{}{
@@ -243,7 +401,7 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 
 		es2 := newEventSummarizer()
 		event2 := withoutReasons.NewEvaluationData(flag1v1, user, ldreason.EvaluationDetail{Value: ldvalue.String("dv")},
-			false, ldvalue.String("dv"), "")
+			false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false)
 		event2.Variation = ldvalue.OptionalInt{}
 		es2.summarizeEvent(event2)
 		verifySummaryEventOutput(t, formatter, es2.snapshot(),
@@ -282,15 +440,15 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 	t.Run("summary - multiple counters", func(t *testing.T) {
 		es := newEventSummarizer()
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v2, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag2, user, ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-			false, flag2Default, ""))
+			false, flag2Default, "", ldvalue.OptionalInt{}, false))
 
 		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
 		require.Equal(t, 1, count)
@@ -329,15 +487,15 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 
 		es := newEventSummarizer()
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, Context(context2), ldreason.NewEvaluationDetail(ldvalue.String("b"), 2, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, Context(context3), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v2, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),
-			false, flag1Default, ""))
+			false, flag1Default, "", ldvalue.OptionalInt{}, false))
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag2, Context(context1), ldreason.NewEvaluationDetail(ldvalue.String("c"), 3, noReason),
-			false, flag2Default, ""))
+			false, flag2Default, "", ldvalue.OptionalInt{}, false))
 
 		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
 		require.Equal(t, 1, count)
