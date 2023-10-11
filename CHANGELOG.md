@@ -2,6 +2,11 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.0] - 2023-10-11
+### Added:
+- `EventProcessor` interface now supports recording migration related events.
+- Event sampling and summary exclusion controls are now supported.
+
 ## [2.0.2] - 2023-05-11
 ### Fixed:
 - Do not queue subsequent events after unrecoverable error in the event processor.
