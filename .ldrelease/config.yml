@@ -11,6 +11,8 @@ jobs:
       name: go
 
 branches:
+  - name: v3
+    description: 3.x - for Go SDK 7+
   - name: v2
     description: 2.x - for Go SDK 6+
   - name: v1
