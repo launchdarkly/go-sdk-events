@@ -267,8 +267,89 @@ func TestEventsCanBeDisabledThroughSamplingRatios(t *testing.T) {
 
 	ep.Flush()
 
-	// TODO: This is now going to generate at least 2 index events
 	es.assertNoMoreEvents(t)
+}
+
+func TestEventsCanForceSampling(t *testing.T) {
+	config := basicConfigWithoutPrivateAttrs()
+
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	now := ldtime.UnixMillisNow()
+	base := BaseEvent{
+		CreationDate: now,
+		Context:      basicContext(),
+	}
+
+	migrationEvent := MigrationOpEventData{
+		BaseEvent:        base,
+		FlagKey:          "flag-key",
+		Default:          ldmigration.Off,
+		Op:               ldmigration.Write,
+		Evaluation:       ldreason.NewEvaluationDetail(ldvalue.Bool(true), 0, ldreason.NewEvalReasonFallthrough()),
+		SamplingRatio:    ldvalue.NewOptionalInt(0),
+		ForceSampling:    true,
+		ConsistencyCheck: ldmigration.NewConsistencyCheck(true, 10),
+		Error:            map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
+		Invoked:          map[ldmigration.Origin]struct{}{ldmigration.Old: {}},
+		Latency:          map[ldmigration.Origin]int{ldmigration.Old: 300, ldmigration.New: 400},
+	}
+	ep.RecordMigrationOpEvent(migrationEvent)
+	ep.Flush()
+
+	assertEventsReceived(
+		t,
+		es,
+		m.AllOf(
+			m.JSONOptProperty("kind").Should(m.Equal("migration_op")),
+			m.JSONOptProperty("samplingRatio").Should(m.Equal(0)),
+		),
+	)
+
+	featureEvent := EvaluationData{
+		BaseEvent:     base,
+		Key:           "flag-key",
+		Variation:     ldvalue.OptionalInt{},
+		Value:         ldvalue.String("on"),
+		Default:       ldvalue.String("off"),
+		Version:       ldvalue.NewOptionalInt(1),
+		Reason:        ldreason.EvaluationReason{},
+		SamplingRatio: ldvalue.NewOptionalInt(0),
+		ForceSampling: true,
+	}
+	ep.RecordEvaluation(featureEvent)
+	ep.Flush()
+
+	assertEventsReceived(
+		t,
+		es,
+		m.JSONOptProperty("kind").Should(m.Equal("index")),
+		m.JSONOptProperty("kind").Should(m.Equal("summary")),
+	)
+
+	identityEvent := IdentifyEventData{
+		BaseEvent:     base,
+		SamplingRatio: ldvalue.NewOptionalInt(0),
+		ForceSampling: true,
+	}
+	ep.RecordIdentifyEvent(identityEvent)
+	ep.Flush()
+
+	assertEventsReceived(t, es, m.JSONOptProperty("kind").Should(m.Equal("identify")))
+
+	customEvent := CustomEventData{
+		BaseEvent:     base,
+		Key:           "custom",
+		Data:          ldvalue.String("hi"),
+		HasMetric:     false,
+		SamplingRatio: ldvalue.NewOptionalInt(0),
+		ForceSampling: true,
+	}
+	ep.RecordCustomEvent(customEvent)
+	ep.Flush()
+
+	assertEventsReceived(t, es, m.JSONOptProperty("kind").Should(m.Equal("custom")))
 }
 
 func TestFeatureEventIsSummarizedAndNotTrackedByDefault(t *testing.T) {

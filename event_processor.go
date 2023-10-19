@@ -300,6 +300,9 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	switch evt := evt.(type) {
 	case EvaluationData:
 		samplingRatio = evt.SamplingRatio
+		if evt.ForceSampling {
+			samplingRatio = ldvalue.NewOptionalInt(1)
+		}
 
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
@@ -318,15 +321,28 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 		}
 	case IdentifyEventData:
 		samplingRatio = evt.SamplingRatio
+		if evt.ForceSampling {
+			samplingRatio = ldvalue.NewOptionalInt(1)
+		}
+
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
 		inlinedUser = true
 	case CustomEventData:
 		samplingRatio = evt.SamplingRatio
+		if evt.ForceSampling {
+			samplingRatio = ldvalue.NewOptionalInt(1)
+		}
+
 		eventContext = evt.Context
 		creationDate = evt.CreationDate
 	case MigrationOpEventData:
-		if ed.shouldSample(evt.SamplingRatio) {
+		samplingRatio = evt.SamplingRatio
+		if evt.ForceSampling {
+			samplingRatio = ldvalue.NewOptionalInt(1)
+		}
+
+		if ed.shouldSample(samplingRatio) {
 			ed.outbox.addEvent(evt)
 		}
 		// We can halt execution here as a migration event shouldn't generate an index or debug event.
