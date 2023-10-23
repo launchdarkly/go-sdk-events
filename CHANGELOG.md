@@ -2,6 +2,10 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.1.0] - 2023-10-23
+### Added:
+- Add new `ForceSampling` field. This ensures an event is sent regardless of the provided `SamplingRatio`.
+
 ## [3.0.0] - 2023-10-11
 ### Added:
 - `EventProcessor` interface now supports recording migration related events.
