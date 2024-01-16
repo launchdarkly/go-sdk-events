@@ -409,6 +409,29 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 	})
 }
 
+func TestIndividualFeatureEventHasContextAttributesRedactedIfAnonymous(t *testing.T) {
+	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
+		ep, es := createEventProcessorAndSender(config)
+		defer ep.Close()
+
+		context := ldcontext.NewBuilder(testContextKey).Anonymous(true).SetString("name", "Example name").SetInt("age", 42).Build()
+		eventContext := Context(context)
+		flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
+		fe := defaultEventFactory.NewEvaluationData(flag, eventContext, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+		ep.RecordEvaluation(fe)
+		ep.Flush()
+
+		assertEventsReceived(t, es,
+			anyIndexEvent(),
+			featureEventWithAllProperties(fe, flag, contextJSON(eventContext, EventsConfiguration{AllAttributesPrivate: true})),
+			// Here we also check that the summary count is still the same regardless of TrackEvents
+			summaryEventWithFlag(flag,
+				summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
+		)
+		es.assertNoMoreEvents(t)
+	})
+}
+
 func TestIndexEventProperties(t *testing.T) {
 	withFeatureEventOrCustomEvent(t,
 		func(t *testing.T, sendEventFn func(EventProcessor, EventInputContext) (anyEventInput, ldtime.UnixMillisecondTime, []m.Matcher), finalEventMatchers []m.Matcher) {
