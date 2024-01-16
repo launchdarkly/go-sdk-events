@@ -392,14 +392,15 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 		ep, es := createEventProcessorAndSender(config)
 		defer ep.Close()
 
+		context := basicContext()
 		flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
-		fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+		fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 		ep.RecordEvaluation(fe)
 		ep.Flush()
 
 		assertEventsReceived(t, es,
 			anyIndexEvent(),
-			featureEventWithAllProperties(fe, flag),
+			featureEventWithAllProperties(fe, flag, contextJSON(context, config)),
 			// Here we also check that the summary count is still the same regardless of TrackEvents
 			summaryEventWithFlag(flag,
 				summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
@@ -524,18 +525,20 @@ func TestDebugEventProperties(t *testing.T) {
 }
 
 func TestFeatureEventCanContainReason(t *testing.T) {
-	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
+	config := basicConfigWithoutPrivateAttrs()
+	ep, es := createEventProcessorAndSender(config)
 	defer ep.Close()
 
+	context := basicContext()
 	flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true}
-	fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
 	fe.Reason = ldreason.NewEvalReasonFallthrough()
 	ep.RecordEvaluation(fe)
 	ep.Flush()
 
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
-		featureEventWithAllProperties(fe, flag),
+		featureEventWithAllProperties(fe, flag, contextJSON(context, config)),
 		anySummaryEvent(),
 	)
 	es.assertNoMoreEvents(t)
@@ -583,7 +586,7 @@ func TestEventCanBeBothTrackedAndDebugged(t *testing.T) {
 
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
-		featureEventWithAllProperties(fe, flag),
+		featureEventWithAllProperties(fe, flag, contextJSON(context, config)),
 		debugEventWithAllProperties(fe, flag, contextJSON(context, config)),
 		summaryEventWithFlag(flag, summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1)),
 	)

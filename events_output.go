@@ -64,11 +64,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		beginEventFields(&obj, kind, evt.BaseEvent.CreationDate)
 		obj.Name("key").String(evt.Key)
 		obj.Maybe("version", evt.Version.IsDefined()).Int(evt.Version.IntValue())
-		if evt.debug {
-			ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
-		} else {
-			writeContextKeys(&obj, &evt.Context.context)
-		}
+		ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
 		evt.Value.WriteToJSONWriter(obj.Name("value"))
 		evt.Default.WriteToJSONWriter(obj.Name("default"))
