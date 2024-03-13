@@ -61,19 +61,20 @@ func featureEventForFlag(flag FlagEventProperties) m.Matcher {
 		m.JSONProperty("key").Should(m.Equal(flag.Key)))
 }
 
-func featureEventWithAllProperties(sourceEvent EvaluationData, flag FlagEventProperties) m.Matcher {
-	return matchFeatureOrDebugEvent(sourceEvent, flag, false, nil)
+func featureEventWithAllProperties(sourceEvent EvaluationData, flag FlagEventProperties, contextJSON json.RawMessage) m.Matcher {
+	return matchFeatureOrDebugEvent(sourceEvent, flag, false, contextJSON)
 }
 
-func debugEventWithAllProperties(sourceEvent EvaluationData, flag FlagEventProperties, contextJSON interface{}) m.Matcher {
+func debugEventWithAllProperties(sourceEvent EvaluationData, flag FlagEventProperties, contextJSON json.RawMessage) m.Matcher {
 	return matchFeatureOrDebugEvent(sourceEvent, flag, true, contextJSON)
 }
 
 func matchFeatureOrDebugEvent(sourceEvent EvaluationData, flag FlagEventProperties,
-	debug bool, inlineContext interface{}) m.Matcher {
+	debug bool, inlineContext json.RawMessage) m.Matcher {
 	props := map[string]interface{}{
 		"kind":         "feature",
 		"key":          flag.Key,
+		"context":      inlineContext,
 		"creationDate": sourceEvent.CreationDate,
 		"version":      flag.Version,
 		"value":        sourceEvent.Value,
@@ -87,11 +88,6 @@ func matchFeatureOrDebugEvent(sourceEvent EvaluationData, flag FlagEventProperti
 	}
 	if sourceEvent.Reason.GetKind() != "" {
 		props["reason"] = json.RawMessage(jsonhelpers.ToJSON(sourceEvent.Reason))
-	}
-	if inlineContext == nil {
-		props["contextKeys"] = expectedContextKeys(sourceEvent.Context.context)
-	} else {
-		props["context"] = inlineContext
 	}
 	if v, ok := sourceEvent.SamplingRatio.Get(); ok && v != 1 {
 		props["samplingRatio"] = v

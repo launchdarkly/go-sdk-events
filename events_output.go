@@ -67,7 +67,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		if evt.debug {
 			ef.contextFormatter.WriteContext(obj.Name("context"), &evt.Context)
 		} else {
-			writeContextKeys(&obj, &evt.Context.context)
+			ef.contextFormatter.WriteContextRedactAnonymous(obj.Name("context"), &evt.Context)
 		}
 		obj.Maybe("variation", evt.Variation.IsDefined()).Int(evt.Variation.IntValue())
 		evt.Value.WriteToJSONWriter(obj.Name("value"))

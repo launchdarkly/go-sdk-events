@@ -81,6 +81,17 @@ func makePrivateAttrLookupData(attrRefList []ldattr.Ref) map[string]*privateAttr
 // WriteContext serializes a Context in the format appropriate for an analytics event, redacting
 // private attributes if necessary.
 func (f *eventContextFormatter) WriteContext(w *jwriter.Writer, ec *EventInputContext) {
+	f.writeContext(w, ec, false)
+}
+
+// WriteContextRedactAnonymous serializes a Context in the format appropriate for an analytics event, redacting
+// private attributes if necessary. If the context is anonymous, ALL attributes will be redacted except key,
+// kind, and anonymous.
+func (f *eventContextFormatter) WriteContextRedactAnonymous(w *jwriter.Writer, ec *EventInputContext) {
+	f.writeContext(w, ec, true)
+}
+
+func (f *eventContextFormatter) writeContext(w *jwriter.Writer, ec *EventInputContext, redactAnonymous bool) {
 	if ec.preserialized != nil {
 		w.Raw(ec.preserialized)
 		return
@@ -90,17 +101,19 @@ func (f *eventContextFormatter) WriteContext(w *jwriter.Writer, ec *EventInputCo
 		return
 	}
 	if ec.context.Multiple() {
-		f.writeContextInternalMulti(w, ec)
+		f.writeContextInternalMulti(w, ec, redactAnonymous)
 	} else {
-		f.writeContextInternalSingle(w, &ec.context, true)
+		f.writeContextInternalSingle(w, &ec.context, true, redactAnonymous)
 	}
 }
 
 func (f *eventContextFormatter) writeContextInternalSingle(
 	w *jwriter.Writer,
 	c *ldcontext.Context,
-	includeKind bool,
+	includeKind,
+	redactAnonymous bool,
 ) {
+	redactAll := f.allAttributesPrivate || (c.Anonymous() && redactAnonymous)
 	obj := w.Object()
 	if includeKind {
 		obj.Name(ldattr.KindAttr).String(string(c.Kind()))
@@ -115,8 +128,8 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 
 	for _, key := range optionalAttrNames {
 		if value := c.GetValue(key); value.IsDefined() {
-			if f.allAttributesPrivate {
-				// If allAttributesPrivate is true, then there's no complex filtering or recursing to be done: all of
+			if redactAll {
+				// If redactAll is true, then there's no complex filtering or recursing to be done: all of
 				// these values are by definition private, so just add their names to the redacted list. Since the
 				// redacted list uses the attribute reference syntax, we may need to escape the value if the name of
 				// this individual attribute happens to be something like "/a/b"; the easiest way to do that is to
@@ -148,14 +161,14 @@ func (f *eventContextFormatter) writeContextInternalSingle(
 	obj.End()
 }
 
-func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, ec *EventInputContext) {
+func (f *eventContextFormatter) writeContextInternalMulti(w *jwriter.Writer, ec *EventInputContext, redactAnonymous bool) {
 	obj := w.Object()
 	obj.Name(ldattr.KindAttr).String(string(ldcontext.MultiKind))
 
 	for i := 0; i < ec.context.IndividualContextCount(); i++ {
 		if ic := ec.context.IndividualContextByIndex(i); ic.IsDefined() {
 			obj.Name(string(ic.Kind()))
-			f.writeContextInternalSingle(w, &ic, false)
+			f.writeContextInternalSingle(w, &ic, false, redactAnonymous)
 		}
 	}
 
