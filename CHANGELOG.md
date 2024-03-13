@@ -2,6 +2,11 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.2.0] - 2024-03-13
+### Changed:
+- Redact anonymous attributes within feature events
+- Always inline contexts for feature events
+
 ## [3.1.0] - 2023-10-23
 ### Added:
 - Add new `ForceSampling` field. This ensures an event is sent regardless of the provided `SamplingRatio`.
