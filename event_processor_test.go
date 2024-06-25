@@ -421,6 +421,7 @@ func TestIndividualFeatureEventHasContextAttributesRedactedIfAnonymous(t *testin
 		ep.RecordEvaluation(fe)
 		ep.Flush()
 
+		// No index event because the context is only anonymous, so after filtering it will not be valid.
 		assertEventsReceived(t, es,
 			anyIndexEvent(),
 			featureEventWithAllProperties(fe, flag, contextJSON(eventContext, EventsConfiguration{AllAttributesPrivate: true})),
@@ -1094,6 +1095,107 @@ func TestEventsAreKeptInBufferIfAllFlushWorkersAreBusy(t *testing.T) {
 		identifyEventForContextKey(user3.context.Key()),
 	)
 	assert.Equal(t, maxFlushWorkers+2, es.getPayloadCount())
+}
+
+func TestAnonymousContextInMultiContextIsOmitted(t *testing.T) {
+	config := basicConfigWithoutPrivateAttrs()
+	config.OmitAnonymousContexts = true
+
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	anonContext := ldcontext.NewBuilder("anon-context").Kind("potato").Anonymous(true).Build()
+	nonAnonContext := ldcontext.New("non-anon-context")
+
+	multiContext := ldcontext.NewMulti(anonContext, nonAnonContext)
+
+	ie := defaultEventFactory.NewIdentifyEventData(EventInputContext{
+		context: multiContext,
+	}, ldvalue.OptionalInt{})
+	ep.RecordIdentifyEvent(ie)
+
+	ep.Flush()
+
+	assertEventsReceived(t, es, m.JSONEqual(map[string]interface{}{
+		"kind":         "identify",
+		"creationDate": ie.CreationDate,
+		"context":      contextJSON(EventInputContext{context: nonAnonContext}, config),
+	}))
+	es.assertNoMoreEvents(t)
+}
+
+func TestContextWithOnlyAnonymousEmitsNoIdentify(t *testing.T) {
+	anonContextA := ldcontext.NewBuilder("a").Kind("a").Anonymous(true).Build()
+	anonContextB := ldcontext.NewBuilder("b").Kind("b").Anonymous(true).Build()
+	multiAnonContext := ldcontext.NewMulti(anonContextA, anonContextB)
+
+	contextsToTest := []struct {
+		context ldcontext.Context
+		name    string
+	}{
+		{context: anonContextA, name: "single anonymous context"},
+		{context: multiAnonContext, name: "multi anonymous context"},
+	}
+
+	for _, testContext := range contextsToTest {
+		t.Run(testContext.name, func(t *testing.T) {
+			config := basicConfigWithoutPrivateAttrs()
+			config.OmitAnonymousContexts = true
+
+			ep, es := createEventProcessorAndSender(config)
+			defer ep.Close()
+
+			ie := defaultEventFactory.NewIdentifyEventData(EventInputContext{
+				context: testContext.context,
+			}, ldvalue.OptionalInt{})
+			ep.RecordIdentifyEvent(ie)
+
+			ep.Flush()
+
+			es.assertNoMoreEvents(t)
+		})
+	}
+}
+
+func TestPreserializedNotOmittedWhenAnonymous(t *testing.T) {
+	// When a preserialized context is provided, then no modifications are done to it.
+	anonContextA := ldcontext.NewBuilder("a").Kind("a").Anonymous(true).Build()
+	anonContextB := ldcontext.NewBuilder("b").Kind("b").Anonymous(true).Build()
+	multiAnonContext := ldcontext.NewMulti(anonContextA, anonContextB)
+
+	contextsToTest := []struct {
+		context ldcontext.Context
+		name    string
+	}{
+		{context: anonContextA, name: "single anonymous context"},
+		{context: multiAnonContext, name: "multi anonymous context"},
+	}
+
+	for _, testContext := range contextsToTest {
+		t.Run(testContext.name, func(t *testing.T) {
+			config := basicConfigWithoutPrivateAttrs()
+			config.OmitAnonymousContexts = true
+
+			ep, es := createEventProcessorAndSender(config)
+			defer ep.Close()
+
+			rawJSON := json.RawMessage(testContext.context.JSONString())
+			ie := defaultEventFactory.NewIdentifyEventData(EventInputContext{
+				preserialized: rawJSON,
+			}, ldvalue.OptionalInt{})
+			ep.RecordIdentifyEvent(ie)
+
+			ep.Flush()
+
+			assertEventsReceived(t, es, m.JSONEqual(map[string]interface{}{
+				"kind":         "identify",
+				"creationDate": ie.CreationDate,
+				"context":      contextJSON(EventInputContext{preserialized: rawJSON}, config),
+			}))
+
+			es.assertNoMoreEvents(t)
+		})
+	}
 }
 
 // used only for testing - ensures that all pending messages and flushes have completed

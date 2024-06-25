@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
 	"github.com/launchdarkly/go-sdk-common/v3/ldsampling"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
@@ -294,7 +295,6 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	// the event (if tracked) and once for debugging.
 	willAddFullEvent := true
 	var debugEvent anyEventInput
-	inlinedUser := false
 	var eventContext EventInputContext
 	var creationDate ldtime.UnixMillisecondTime
 	switch evt := evt.(type) {
@@ -325,9 +325,18 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			samplingRatio = ldvalue.NewOptionalInt(1)
 		}
 
-		eventContext = evt.Context
-		creationDate = evt.CreationDate
-		inlinedUser = true
+		eventContext = ed.contextForIndexOrIdentify(evt.Context)
+		if eventContext.preserialized == nil && eventContext.context.Err() != nil {
+			// The input context would have likely been valid, but after filtering it is not.
+			// As this is an identify event there is nothing to add to the outbox and we should return.
+			return
+		}
+		evt.Context = eventContext
+		ed.outbox.addEvent(evt)
+		_ = ed.userKeys.add(eventContext.context.FullyQualifiedKey())
+		// We add the key to the cache to indicate it was seen, and no additional
+		// events would be sent.
+		return
 	case CustomEventData:
 		samplingRatio = evt.SamplingRatio
 		if evt.ForceSampling {
@@ -354,12 +363,15 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	// For each context we haven't seen before, we add an index event before the event that referenced
 	// the context - unless the original event will contain an inline context (e.g. an identify event).
 	alreadySeenUser := ed.userKeys.add(eventContext.context.FullyQualifiedKey())
-	if !(willAddFullEvent && inlinedUser) {
-		if alreadySeenUser {
-			ed.deduplicatedContexts++
-		} else {
+	if alreadySeenUser {
+		ed.deduplicatedContexts++
+	} else {
+		filteredContext := ed.contextForIndexOrIdentify(eventContext)
+		// After filtering the context may not be valid, and we will not want to
+		// add it to the outbox.
+		if filteredContext.preserialized == nil && filteredContext.context.Err() == nil {
 			indexEvent := indexEvent{
-				BaseEvent{CreationDate: creationDate, Context: eventContext},
+				BaseEvent{CreationDate: creationDate, Context: filteredContext},
 			}
 			ed.outbox.addEvent(indexEvent)
 		}
@@ -438,6 +450,31 @@ func (ed *eventDispatcher) shouldSample(ratio ldvalue.OptionalInt) bool {
 	}
 
 	return ed.sampler.Sample(ratio.OrElse(1))
+}
+
+func (ed *eventDispatcher) contextForIndexOrIdentify(eventContext EventInputContext) EventInputContext {
+	if !ed.config.OmitAnonymousContexts {
+		return eventContext
+	}
+	if eventContext.preserialized != nil {
+		// This is an event from PHP; we expect that SDK to have already done this filtering.
+		return eventContext
+	}
+	parts := eventContext.context.GetAllIndividualContexts(nil)
+
+	var filteredParts []ldcontext.Context
+
+	for _, ctx := range parts {
+		if !ctx.Anonymous() {
+			filteredParts = append(filteredParts, ctx)
+		}
+	}
+
+	filteredContext := ldcontext.NewMulti(filteredParts...)
+
+	return EventInputContext{
+		context: filteredContext,
+	}
 }
 
 func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
