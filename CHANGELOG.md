@@ -2,6 +2,10 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.3.0] - 2024-06-25
+### Added:
+- Added the ability to optionally omit anonymous contexts from identify and index events.
+
 ## [3.2.0] - 2024-03-13
 ### Changed:
 - Redact anonymous attributes within feature events
