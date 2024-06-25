@@ -50,6 +50,8 @@ type EventsConfiguration struct {
 	UserKeysCapacity int
 	// The interval at which the event processor will reset its set of known user keys.
 	UserKeysFlushInterval time.Duration
+	// Should anonymous contexts be omitted from index and identify events.
+	OmitAnonymousContexts bool
 	// Used in testing to instrument the current time.
 	currentTimeProvider func() ldtime.UnixMillisecondTime
 	// Used in testing to set a DiagnosticRecordingInterval that is less than the minimum.
