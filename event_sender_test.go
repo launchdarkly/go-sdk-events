@@ -1,7 +1,10 @@
 package ldevents
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,7 +37,7 @@ func (ei errorInfo) String() string {
 }
 
 func TestDataIsSentToAnalyticsURI(t *testing.T) {
-	es, requestsCh := makeEventSenderWithRequestSink()
+	es, requestsCh := makeEventSenderWithRequestSink(EventSenderConfiguration{})
 
 	result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 	assert.True(t, result.Success)
@@ -45,8 +48,22 @@ func TestDataIsSentToAnalyticsURI(t *testing.T) {
 	assert.Equal(t, arbitraryJSONData, r.Body)
 }
 
+func TestDataIsSentCompressed(t *testing.T) {
+	es, requestsCh := makeEventSenderWithRequestSink(EventSenderConfiguration{EnableCompression: true})
+
+	result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
+	assert.True(t, result.Success)
+
+	assert.Equal(t, 1, len(requestsCh))
+	r := <-requestsCh
+	assert.Equal(t, fakeEventsURI, r.Request.URL.String())
+	data, err := decompressGzipData(r.Body)
+	assert.NoError(t, err)
+	assert.Equal(t, arbitraryJSONData, data)
+}
+
 func TestDataIsSentToDiagnosticURI(t *testing.T) {
-	es, requestsCh := makeEventSenderWithRequestSink()
+	es, requestsCh := makeEventSenderWithRequestSink(EventSenderConfiguration{})
 
 	result := es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
 	assert.True(t, result.Success)
@@ -58,7 +75,7 @@ func TestDataIsSentToDiagnosticURI(t *testing.T) {
 }
 
 func TestUnknownDataKindIsIgnored(t *testing.T) {
-	es, requestsCh := makeEventSenderWithRequestSink()
+	es, requestsCh := makeEventSenderWithRequestSink(EventSenderConfiguration{})
 
 	result := es.SendEventData(EventDataKind("not valid"), arbitraryJSONData, 1)
 	assert.False(t, result.Success)
@@ -67,7 +84,7 @@ func TestUnknownDataKindIsIgnored(t *testing.T) {
 }
 
 func TestAnalyticsEventsHaveSchemaAndPayloadIDHeaders(t *testing.T) {
-	es, requestsCh := makeEventSenderWithRequestSink()
+	es, requestsCh := makeEventSenderWithRequestSink(EventSenderConfiguration{})
 
 	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 	es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
@@ -87,7 +104,7 @@ func TestAnalyticsEventsHaveSchemaAndPayloadIDHeaders(t *testing.T) {
 }
 
 func TestDiagnosticEventsDoNotHaveSchemaOrPayloadID(t *testing.T) {
-	es, requestsCh := makeEventSenderWithRequestSink()
+	es, requestsCh := makeEventSenderWithRequestSink(EventSenderConfiguration{})
 
 	es.SendEventData(DiagnosticEventDataKind, arbitraryJSONData, 1)
 
@@ -119,6 +136,7 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 					httphelpers.HandlerWithStatus(202), // then succeeds
 				),
 			)
+
 			es := makeEventSenderWithHTTPClient(httphelpers.ClientFromHandler(handler))
 
 			result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
@@ -129,8 +147,10 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 			assert.Equal(t, 2, len(requestsCh))
 			r0 := <-requestsCh
 			r1 := <-requestsCh
+
 			assert.Equal(t, arbitraryJSONData, r0.Body)
 			assert.Equal(t, arbitraryJSONData, r1.Body)
+
 			id0 := r0.Request.Header.Get(payloadIDHeader)
 			assert.NotEqual(t, "", id0)
 			assert.Equal(t, id0, r1.Request.Header.Get(payloadIDHeader))
@@ -154,8 +174,10 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 			assert.Equal(t, 2, len(requestsCh))
 			r0 := <-requestsCh
 			r1 := <-requestsCh
+
 			assert.Equal(t, arbitraryJSONData, r0.Body)
 			assert.Equal(t, arbitraryJSONData, r1.Body)
+
 			id0 := r0.Request.Header.Get(payloadIDHeader)
 			assert.NotEqual(t, "", id0)
 			assert.Equal(t, id0, r1.Request.Header.Get(payloadIDHeader))
@@ -182,6 +204,7 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 
 			assert.Equal(t, 1, len(requestsCh))
 			r := <-requestsCh
+
 			assert.Equal(t, arbitraryJSONData, r.Body)
 		})
 	}
@@ -299,7 +322,7 @@ func TestSendEventDataCanUseDefaultHTTPClient(t *testing.T) {
 
 	r := <-requestsCh
 	assert.Equal(t, "/bulk", r.Request.URL.Path)
-	assert.Equal(t, string(arbitraryJSONData), string(r.Body))
+	assert.Equal(t, arbitraryJSONData, r.Body)
 }
 
 func TestSendEventDataCanOverrideURI(t *testing.T) {
@@ -330,8 +353,19 @@ func makeEventSenderWithHTTPClient(client *http.Client) EventSender {
 	return makeEventSenderWithConfig(EventSenderConfiguration{Client: client})
 }
 
-func makeEventSenderWithRequestSink() (EventSender, <-chan httphelpers.HTTPRequestInfo) {
+func makeEventSenderWithRequestSink(config EventSenderConfiguration) (EventSender, <-chan httphelpers.HTTPRequestInfo) {
 	handler, requestsCh := httphelpers.RecordingHandler(httphelpers.HandlerForMethod("POST", httphelpers.HandlerWithStatus(202), nil))
 	client := httphelpers.ClientFromHandler(handler)
-	return makeEventSenderWithHTTPClient(client), requestsCh
+	config.Client = client
+
+	return makeEventSenderWithConfig(config), requestsCh
+}
+
+func decompressGzipData(data []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return data, err
+	}
+
+	return io.ReadAll(reader)
 }
