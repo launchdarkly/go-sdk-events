@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.4.0] - 2024-07-24
+### Added:
+- Add `EnableCompression` option on `EventSenderConfiguration` to enable gzip compression of event payloads.
+
+### Fixed:
+- Add index event when processing preserialized events.
+
 ## [3.3.0] - 2024-06-25
 ### Added:
 - Added the ability to optionally omit anonymous contexts from identify and index events.
