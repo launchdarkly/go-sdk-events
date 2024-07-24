@@ -1157,7 +1157,7 @@ func TestContextWithOnlyAnonymousEmitsNoIdentify(t *testing.T) {
 	}
 }
 
-func TestPreserializedNotOmittedWhenAnonymous(t *testing.T) {
+func TestPreserializedIdentifyEventDoesNotRedactAnonymousContexts(t *testing.T) {
 	// When a preserialized context is provided, then no modifications are done to it.
 	anonContextA := ldcontext.NewBuilder("a").Kind("a").Anonymous(true).Build()
 	anonContextB := ldcontext.NewBuilder("b").Kind("b").Anonymous(true).Build()
@@ -1192,6 +1192,45 @@ func TestPreserializedNotOmittedWhenAnonymous(t *testing.T) {
 				"creationDate": ie.CreationDate,
 				"context":      contextJSON(EventInputContext{preserialized: rawJSON}, config),
 			}))
+
+			es.assertNoMoreEvents(t)
+		})
+	}
+}
+
+func TestEventsStillEmitIndexEventsWithAnonymousContexts(t *testing.T) {
+	// When a preserialized context is provided, then no modifications are done to it.
+	anonContextA := ldcontext.NewBuilder("a").Kind("a").Anonymous(true).Build()
+	anonContextB := ldcontext.NewBuilder("b").Kind("b").Anonymous(true).Build()
+	multiAnonContext := ldcontext.NewMulti(anonContextA, anonContextB)
+
+	contextsToTest := []struct {
+		context ldcontext.Context
+		name    string
+	}{
+		{context: anonContextA, name: "single anonymous context"},
+		{context: multiAnonContext, name: "multi anonymous context"},
+	}
+
+	for _, testContext := range contextsToTest {
+		t.Run(testContext.name, func(t *testing.T) {
+			config := basicConfigWithoutPrivateAttrs()
+			config.OmitAnonymousContexts = true
+
+			ep, es := createEventProcessorAndSender(config)
+			defer ep.Close()
+
+			rawJSON := json.RawMessage(testContext.context.JSONString())
+			ce := defaultEventFactory.NewCustomEventData("key", EventInputContext{
+				preserialized: rawJSON,
+			}, ldvalue.String("hi"), false, 1, ldvalue.OptionalInt{})
+			ep.RecordCustomEvent(ce)
+
+			ep.Flush()
+
+			assertEventsReceived(t, es,
+				m.JSONOptProperty("kind").Should(m.Equal("index")),
+				m.JSONOptProperty("kind").Should(m.Equal("custom")))
 
 			es.assertNoMoreEvents(t)
 		})

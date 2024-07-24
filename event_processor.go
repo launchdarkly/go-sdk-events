@@ -366,12 +366,28 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	if alreadySeenUser {
 		ed.deduplicatedContexts++
 	} else {
-		filteredContext := ed.contextForIndexOrIdentify(eventContext)
-		// After filtering the context may not be valid, and we will not want to
-		// add it to the outbox.
-		if filteredContext.preserialized == nil && filteredContext.context.Err() == nil {
+		// If the context hasn't been preserialized, then we potentially need
+		// to deal with anonymous redaction. If that redaction results in an
+		// invalid context, then we will not send the index event.
+		if eventContext.preserialized == nil {
+			filteredContext := ed.contextForIndexOrIdentify(eventContext)
+			// After filtering the context may not be valid, and we will not want to
+			// add it to the outbox.
+			if filteredContext.context.Err() == nil {
+				indexEvent := indexEvent{
+					BaseEvent{CreationDate: creationDate, Context: filteredContext},
+				}
+				ed.outbox.addEvent(indexEvent)
+			}
+		} else {
+			// If the context was preserialized, then we will just generate the
+			// index event PHP requires without any type of redaction.
+			//
+			// The redaction setting is per SDK. The PHP SDK cannot support
+			// that option since it doesn't generate index events so we default
+			// to sending the full payload.
 			indexEvent := indexEvent{
-				BaseEvent{CreationDate: creationDate, Context: filteredContext},
+				BaseEvent{CreationDate: creationDate, Context: eventContext},
 			}
 			ed.outbox.addEvent(indexEvent)
 		}

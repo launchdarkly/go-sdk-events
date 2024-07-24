@@ -2,6 +2,7 @@ package ldevents
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -38,6 +39,8 @@ type EventSenderConfiguration struct {
 	Loggers ldlog.Loggers
 	// RetryDelay is the length of time to wait for a retry, or 0 to use the default delay (1 second).
 	RetryDelay time.Duration
+	// Enable gzip compression for the event payload.
+	EnableCompression bool
 }
 
 type defaultEventSender struct {
@@ -139,6 +142,18 @@ func SendEventDataWithRetry(
 		return EventSenderResult{}
 	}
 
+	config.Loggers.Debugf("Sending %s: %s", description, data)
+
+	if config.EnableCompression {
+		compressed, err := compressPayload(data)
+		if err != nil {
+			config.Loggers.Errorf("Gzip compression failed for event payload: %s", err) // COVERAGE: no way to simulate this condition in unit tests
+		} else {
+			data = compressed
+			headers.Set("Content-Encoding", "gzip")
+		}
+	}
+
 	if overridePath != "" {
 		path = "/" + strings.TrimLeft(overridePath, "/")
 	}
@@ -147,8 +162,6 @@ func SendEventDataWithRetry(
 		baseURI = defaultEventsURI
 	}
 	uri = baseURI + path
-
-	config.Loggers.Debugf("Sending %s: %s", description, data)
 
 	var resp *http.Response
 	var respErr error
@@ -207,4 +220,21 @@ func SendEventDataWithRetry(
 		}
 	}
 	return EventSenderResult{}
+}
+
+// compressPayload compresses the payload using gzip. If the compression
+// fails, it returns the original payload.
+func compressPayload(payload []byte) ([]byte, error) {
+	var b bytes.Buffer
+
+	writer := gzip.NewWriter(&b)
+	if _, err := writer.Write(payload); err != nil {
+		return payload, err // COVERAGE: no way to simulate this condition in unit tests
+	}
+
+	if err := writer.Close(); err != nil {
+		return payload, err // COVERAGE: no way to simulate this condition in unit tests
+	}
+
+	return b.Bytes(), nil
 }
