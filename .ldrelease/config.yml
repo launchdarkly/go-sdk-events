@@ -1,9 +1,5 @@
 version: 2
 
-repo:
-  public: go-sdk-events
-  private: go-sdk-events-private
-
 jobs:
   - docker:
       image: golang:1.18-buster
