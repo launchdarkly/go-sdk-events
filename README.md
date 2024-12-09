@@ -1,6 +1,7 @@
 # LaunchDarkly Go SDK Events Engine
 
-[![Circle CI](https://circleci.com/gh/launchdarkly/go-sdk-events.svg?style=svg)](https://circleci.com/gh/launchdarkly/go-sdk-events) [![Documentation](https://img.shields.io/static/v1?label=go.dev&message=reference&color=00add8)](https://pkg.go.dev/github.com/launchdarkly/go-sdk-events/v3)
+[![Documentation](https://img.shields.io/static/v1?label=go.dev&message=reference&color=00add8)](https://pkg.go.dev/github.com/launchdarkly/go-sdk-events/v3)
+[![Actions Status](https://github.com/launchdarkly/go-sdk-events/actions/workflows/ci.yml/badge.svg?branch=v3)](https://github.com/launchdarkly/go-sdk-events/actions/workflows/ci.yml)
 
 ## Overview
 
