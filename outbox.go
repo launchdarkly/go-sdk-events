@@ -39,15 +39,16 @@ func (b *eventsOutbox) addToSummary(ed EvaluationData) {
 	b.summarizer.summarizeEvent(ed)
 }
 
-func (b *eventsOutbox) getPayload() flushPayload {
+func (b *eventsOutbox) getPayload(completed chan struct{}) flushPayload {
 	var copied []anyEventOutput
 	if len(b.events) > 0 {
 		copied = make([]anyEventOutput, len(b.events))
 		copy(copied, b.events)
 	}
 	return flushPayload{
-		events:  copied,
-		summary: b.summarizer.snapshot(),
+		events:    copied,
+		summary:   b.summarizer.snapshot(),
+		completed: completed,
 	}
 }
 
