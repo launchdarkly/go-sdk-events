@@ -1,6 +1,7 @@
 package ldevents
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"time"
@@ -44,6 +45,7 @@ type flushPayload struct {
 	diagnosticEvent ldvalue.Value
 	events          []anyEventOutput
 	summary         eventSummary
+	completed       chan struct{}
 }
 
 // Payload of the inboxCh channel.
@@ -173,20 +175,23 @@ func startEventDispatcher(
 		config:           config,
 	}
 
+	ctx, workerCancelFunc := context.WithCancel(context.Background())
+
 	// Start a fixed-size pool of workers that wait on flushTriggerCh. This is the
 	// maximum number of flushes we can do concurrently.
 	for i := 0; i < maxFlushWorkers; i++ {
-		go runFlushTask(config, formatter, ed.flushCh, ed.workersGroup, ed.senderResultCh)
+		go runFlushTask(ctx, config, formatter, ed.flushCh, ed.workersGroup, ed.senderResultCh)
 	}
 	if config.DiagnosticsManager != nil {
 		event := config.DiagnosticsManager.CreateInitEvent()
 		ed.sendDiagnosticsEvent(event)
 	}
-	go ed.runMainLoop(inboxCh)
+	go ed.runMainLoop(inboxCh, workerCancelFunc)
 }
 
 func (ed *eventDispatcher) runMainLoop(
 	inboxCh <-chan eventDispatcherMessage,
+	workerCancelFunc context.CancelFunc,
 ) {
 	if err := recover(); err != nil { // COVERAGE: no way to simulate this condition in unit tests
 		ed.config.Loggers.Errorf("Unexpected panic in event processing thread: %+v", err)
@@ -232,11 +237,7 @@ func (ed *eventDispatcher) runMainLoop(
 			case sendEventMessage:
 				ed.processEvent(m.event)
 			case flushEventsMessage:
-				ed.triggerFlush()
-				if m.replyCh != nil {
-					ed.workersGroup.Wait() // Wait for all in-progress flushes to complete
-					m.replyCh <- struct{}{}
-				}
+				ed.triggerFlush(m.replyCh)
 			case syncEventsMessage:
 				ed.workersGroup.Wait()
 				m.replyCh <- struct{}{}
@@ -246,8 +247,10 @@ func (ed *eventDispatcher) runMainLoop(
 				if diagnosticsTicker != nil {
 					diagnosticsTicker.Stop()
 				}
-				ed.workersGroup.Wait() // Wait for all in-progress flushes to complete
 				close(ed.flushCh)      // Causes all idle flush workers to terminate
+				workerCancelFunc()     // Causes all in-progress workers to abandon their work and exit.
+				ed.workersGroup.Wait() // Wait to make sure all the workers have fully completed their work.
+
 				close(ed.senderResultCh)
 				m.replyCh <- struct{}{}
 				return
@@ -263,7 +266,7 @@ func (ed *eventDispatcher) runMainLoop(
 				ed.lastKnownPastTime = result.TimeFromServer
 			}
 		case <-flushTicker.C:
-			ed.triggerFlush()
+			ed.triggerFlush(nil)
 		case <-usersResetTicker.C:
 			ed.userKeys.clear()
 		case <-diagnosticsTickerCh:
@@ -413,12 +416,15 @@ func (ed *eventDispatcher) shouldDebugEvent(evt *EvaluationData) bool {
 }
 
 // Signal that we would like to do a flush as soon as possible.
-func (ed *eventDispatcher) triggerFlush() {
+func (ed *eventDispatcher) triggerFlush(completed chan struct{}) {
 	if ed.disabled {
+		if completed != nil {
+			close(completed)
+		}
 		return
 	}
 	// Is there anything to flush?
-	payload := ed.outbox.getPayload()
+	payload := ed.outbox.getPayload(completed)
 	totalEventCount := len(payload.events)
 	if payload.summary.hasCounters() {
 		totalEventCount++
@@ -493,7 +499,7 @@ func (ed *eventDispatcher) contextForIndexOrIdentify(eventContext EventInputCont
 	}
 }
 
-func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
+func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
 	workersGroup *sync.WaitGroup, senderResultCh chan<- EventSenderResult) {
 	for {
 		payload, more := <-flushCh
@@ -510,9 +516,20 @@ func runFlushTask(config EventsConfiguration, formatter *eventOutputFormatter, f
 			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)
 			if len(bytes) > 0 {
 				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, count)
-				senderResultCh <- result
+
+				select {
+				case <-ctx.Done():
+				default:
+					senderResultCh <- result
+				}
 			}
+
 		}
+
+		if payload.completed != nil {
+			close(payload.completed)
+		}
+
 		workersGroup.Done() // Decrement the count of in-progress flushes
 	}
 }
