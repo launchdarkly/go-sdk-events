@@ -58,7 +58,6 @@ func TestEventOutputFullEvents(t *testing.T) {
 		// just want to verify here that eventOutputFormatter is actually *using* eventContextFormatter with
 		// the specified configuration.
 		contextJSON := contextJSON(context, config)
-		contextKeys := expectedContextKeys(context.context)
 
 		t.Run("feature", func(t *testing.T) {
 			event1 := withoutReasons.NewEvaluationData(flag, context, ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
@@ -293,7 +292,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"kind":         "custom",
 					"key":          "eventkey",
 					"creationDate": fakeTime,
-					"contextKeys":  contextKeys,
+					"context":      contextJSON,
 				}))
 
 			event2 := withoutReasons.NewCustomEventData("eventkey", context, ldvalue.String("d"), false, 0, ldvalue.OptionalInt{})
@@ -302,7 +301,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"kind":         "custom",
 					"key":          "eventkey",
 					"creationDate": fakeTime,
-					"contextKeys":  contextKeys,
+					"context":      contextJSON,
 					"data":         "d",
 				}))
 
@@ -312,7 +311,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"kind":         "custom",
 					"key":          "eventkey",
 					"creationDate": fakeTime,
-					"contextKeys":  contextKeys,
+					"context":      contextJSON,
 					"metricValue":  2.5,
 				}))
 
@@ -323,7 +322,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"kind":         "custom",
 					"key":          "eventkey",
 					"creationDate": fakeTime,
-					"contextKeys":  contextKeys,
+					"context":      contextJSON,
 				}))
 
 			// We should explicitly include the sampling ratio when specified to something other than 1
@@ -333,7 +332,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"kind":          "custom",
 					"key":           "eventkey",
 					"creationDate":  fakeTime,
-					"contextKeys":   contextKeys,
+					"context":       contextJSON,
 					"samplingRatio": 10,
 				}))
 
@@ -344,7 +343,7 @@ func TestEventOutputFullEvents(t *testing.T) {
 					"kind":          "custom",
 					"key":           "eventkey",
 					"creationDate":  fakeTime,
-					"contextKeys":   contextKeys,
+					"context":       contextJSON,
 					"samplingRatio": 0,
 				}))
 		})

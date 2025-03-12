@@ -85,7 +85,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		if !evt.Data.IsNull() {
 			evt.Data.WriteToJSONWriter(obj.Name("data"))
 		}
-		writeContextKeys(&obj, &evt.Context.context)
+		ef.contextFormatter.WriteContextRedactAnonymous(obj.Name("context"), &evt.Context)
 		obj.Maybe("metricValue", evt.HasMetric).Float64(evt.MetricValue)
 
 		writeSamplingRatio(&obj, evt.SamplingRatio)
@@ -101,7 +101,7 @@ func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventO
 		obj.Name("operation").String(string(evt.Op))
 
 		writeSamplingRatio(&obj, evt.SamplingRatio)
-		writeContextKeys(&obj, &evt.Context.context)
+		ef.contextFormatter.WriteContextRedactAnonymous(obj.Name("context"), &evt.Context)
 
 		evalObj := obj.Name("evaluation").Object()
 		evalObj.Name("key").String(evt.FlagKey)
