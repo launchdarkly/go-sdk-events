@@ -141,7 +141,7 @@ func TestMigrationOpEventProperties(t *testing.T) {
 		"operation":     "write",
 		"creationDate":  now,
 		"samplingRatio": 100,
-		"contextKeys":   expectedContextKeys(context.context),
+		"context":       context.context,
 		"evaluation": map[string]interface{}{
 			"key":       "flag-key",
 			"value":     ldvalue.Bool(true),
@@ -210,7 +210,7 @@ func TestMigrationOpEventPropertiesWithoutOptionalMeasurements(t *testing.T) {
 		"operation":     "write",
 		"creationDate":  now,
 		"samplingRatio": 100,
-		"contextKeys":   expectedContextKeys(context.context),
+		"context":       context.context,
 		"evaluation": map[string]interface{}{
 			"key":       "flag-key",
 			"value":     ldvalue.Bool(true),
@@ -728,7 +728,7 @@ func TestCustomEventProperties(t *testing.T) {
 		"key":           ce.Key,
 		"data":          data,
 		"samplingRatio": 2,
-		"contextKeys":   expectedContextKeys(context.context),
+		"context":       context.context,
 	})
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
@@ -755,7 +755,7 @@ func TestCustomEventCanHaveMetricValue(t *testing.T) {
 		"key":          ce.Key,
 		"data":         data,
 		"metricValue":  metric,
-		"contextKeys":  expectedContextKeys(context.context),
+		"context":      context.context,
 	})
 	assertEventsReceived(t, es,
 		anyIndexEvent(),
