@@ -2,6 +2,18 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.4.0...v3.5.0) (2025-03-13)
+
+
+### Features
+
+* Inline context for custom and migration op events ([#28](https://github.com/launchdarkly/go-sdk-events/issues/28)) ([586c241](https://github.com/launchdarkly/go-sdk-events/commit/586c241e1c837816f0e8e0a38596c44ede3bcef5))
+
+
+### Bug Fixes
+
+* Fix potential deadlock during processor shutdown ([#29](https://github.com/launchdarkly/go-sdk-events/issues/29)) ([e0b7f85](https://github.com/launchdarkly/go-sdk-events/commit/e0b7f859a47b48573b4c812ec30bb0441ddeaecb))
+
 ## [3.4.0] - 2024-07-24
 ### Added:
 - Add `EnableCompression` option on `EventSenderConfiguration` to enable gzip compression of event payloads.
