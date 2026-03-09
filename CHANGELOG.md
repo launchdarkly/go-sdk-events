@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.1](https://github.com/launchdarkly/go-sdk-events/compare/v3.5.0...v3.5.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* Bump gopkg.in/yaml.v3 from 3.0.0 to 3.0.1 ([#32](https://github.com/launchdarkly/go-sdk-events/issues/32)) ([623e682](https://github.com/launchdarkly/go-sdk-events/commit/623e682b0a67e9f72d2658925ef7debe8c2b7d43))
+
 ## [3.5.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.4.0...v3.5.0) (2025-03-13)
 
 
