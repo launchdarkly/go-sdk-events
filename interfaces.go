@@ -76,8 +76,8 @@ type EventMetrics interface {
 
 	// RecordEventsFailedSend is called when a batch of events could not be delivered to the
 	// events service after all retry attempts. The count parameter indicates how many events
-	// were in the failed batch.
-	RecordEventsFailedSend(count int)
+	// were in the failed batch. The metadata parameter provides additional context about the failure.
+	RecordEventsFailedSend(count int, metadata EventSendFailureMetadata)
 
 	// RecordEventsBytesSent is called when a batch of events has been successfully delivered.
 	// The bytes parameter is the size of the serialized event payload before compression.
@@ -86,6 +86,14 @@ type EventMetrics interface {
 	// RecordPendingEvents is called after any operation that changes the number of events
 	// buffered in the outbox. The count parameter is the current total number of events pending.
 	RecordPendingEvents(count int)
+}
+
+// EventSendFailureMetadata provides additional context about why an event batch failed to send.
+// This struct may be extended with additional fields in the future without breaking compatibility.
+type EventSendFailureMetadata struct {
+	// StatusCode is the HTTP status code returned by the events service, or 0 if the failure
+	// occurred before receiving an HTTP response (e.g. network error).
+	StatusCode int
 }
 
 // EventSenderResult is the return type for EventSender.SendEventData.
@@ -97,4 +105,6 @@ type EventSenderResult struct {
 	MustShutDown bool
 	// TimeFromServer is the last known date/time reported by the server, if available, otherwise zero.
 	TimeFromServer ldtime.UnixMillisecondTime
+	// StatusCode is the HTTP status code from the last response, or 0 if no response was received.
+	StatusCode int
 }

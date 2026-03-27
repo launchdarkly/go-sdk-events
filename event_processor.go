@@ -528,7 +528,9 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 						config.EventMetrics.RecordEventsSent(count)
 						config.EventMetrics.RecordEventsBytesSent(len(bytes))
 					} else {
-						config.EventMetrics.RecordEventsFailedSend(count)
+						config.EventMetrics.RecordEventsFailedSend(count, EventSendFailureMetadata{
+							StatusCode: result.StatusCode,
+						})
 					}
 				}
 

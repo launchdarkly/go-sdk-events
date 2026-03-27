@@ -1027,11 +1027,12 @@ func TestDiagnosticPeriodicEventHasEventCounters(t *testing.T) {
 }
 
 type mockEventMetrics struct {
-	droppedCount    int
-	sentCount       int
-	failedSendCount int
-	bytesSent       int
-	lastPendingEvents  int
+	droppedCount      int
+	sentCount         int
+	failedSendCount   int
+	lastFailedSendMeta EventSendFailureMetadata
+	bytesSent         int
+	lastPendingEvents int
 }
 
 func (m *mockEventMetrics) RecordDroppedEvents(count int) {
@@ -1042,8 +1043,9 @@ func (m *mockEventMetrics) RecordEventsSent(count int) {
 	m.sentCount += count
 }
 
-func (m *mockEventMetrics) RecordEventsFailedSend(count int) {
+func (m *mockEventMetrics) RecordEventsFailedSend(count int, metadata EventSendFailureMetadata) {
 	m.failedSendCount += count
+	m.lastFailedSendMeta = metadata
 }
 
 func (m *mockEventMetrics) RecordEventsBytesSent(bytes int) {
