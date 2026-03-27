@@ -52,6 +52,9 @@ type EventsConfiguration struct {
 	UserKeysFlushInterval time.Duration
 	// Should anonymous contexts be omitted from index and identify events.
 	OmitAnonymousContexts bool
+	// EventMetrics receives metrics about event processing such as dropped event counts.
+	// If nil, no metrics are recorded.
+	EventMetrics EventMetrics
 	// Used in testing to instrument the current time.
 	currentTimeProvider func() ldtime.UnixMillisecondTime
 	// Used in testing to set a DiagnosticRecordingInterval that is less than the minimum.

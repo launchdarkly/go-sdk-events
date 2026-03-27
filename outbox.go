@@ -11,14 +11,16 @@ type eventsOutbox struct {
 	capacityExceeded bool
 	droppedEvents    int
 	loggers          ldlog.Loggers
+	eventMetrics     EventMetrics
 }
 
-func newEventsOutbox(capacity int, loggers ldlog.Loggers) *eventsOutbox {
+func newEventsOutbox(capacity int, loggers ldlog.Loggers, eventMetrics EventMetrics) *eventsOutbox {
 	return &eventsOutbox{
-		events:     make([]anyEventOutput, 0, capacity),
-		summarizer: newEventSummarizer(),
-		capacity:   capacity,
-		loggers:    loggers,
+		events:       make([]anyEventOutput, 0, capacity),
+		summarizer:   newEventSummarizer(),
+		capacity:     capacity,
+		loggers:      loggers,
+		eventMetrics: eventMetrics,
 	}
 }
 
@@ -29,10 +31,16 @@ func (b *eventsOutbox) addEvent(event anyEventInput) {
 			b.loggers.Warn("Exceeded event queue capacity. Increase capacity to avoid dropping events.")
 		}
 		b.droppedEvents++
+		if b.eventMetrics != nil {
+			b.eventMetrics.RecordDroppedEvents(1)
+		}
 		return
 	}
 	b.capacityExceeded = false
 	b.events = append(b.events, event)
+	if b.eventMetrics != nil {
+		b.eventMetrics.RecordPendingEvents(len(b.events))
+	}
 }
 
 func (b *eventsOutbox) addToSummary(ed EvaluationData) {
@@ -58,4 +66,7 @@ func (b *eventsOutbox) clear() {
 	}
 	b.events = b.events[0:0]
 	b.summarizer.reset()
+	if b.eventMetrics != nil {
+		b.eventMetrics.RecordPendingEvents(0)
+	}
 }

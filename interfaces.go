@@ -61,6 +61,33 @@ const (
 	DiagnosticEventDataKind EventDataKind = "diagnostic"
 )
 
+// EventMetrics defines an interface for receiving metrics about event processing. Implementations
+// can use this to record telemetry (e.g. via OpenTelemetry) about events that are dropped due to
+// capacity limits or successfully sent. If no implementation is provided in EventsConfiguration,
+// no metrics are recorded.
+type EventMetrics interface {
+	// RecordDroppedEvents is called when events are discarded because the event buffer has reached
+	// its configured capacity. The count parameter indicates how many events were dropped.
+	RecordDroppedEvents(count int)
+
+	// RecordEventsSent is called when a batch of events has been successfully delivered to the
+	// events service. The count parameter indicates how many events were in the batch.
+	RecordEventsSent(count int)
+
+	// RecordEventsFailedSend is called when a batch of events could not be delivered to the
+	// events service after all retry attempts. The count parameter indicates how many events
+	// were in the failed batch.
+	RecordEventsFailedSend(count int)
+
+	// RecordEventsBytesSent is called when a batch of events has been successfully delivered.
+	// The bytes parameter is the size of the serialized event payload before compression.
+	RecordEventsBytesSent(bytes int)
+
+	// RecordPendingEvents is called after any operation that changes the number of events
+	// buffered in the outbox. The count parameter is the current total number of events pending.
+	RecordPendingEvents(count int)
+}
+
 // EventSenderResult is the return type for EventSender.SendEventData.
 type EventSenderResult struct {
 	// Success is true if the event payload was delivered.

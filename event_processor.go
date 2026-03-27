@@ -20,10 +20,11 @@ type anyEventInput interface{}
 type anyEventOutput interface{}
 
 type defaultEventProcessor struct {
-	inboxCh       chan eventDispatcherMessage
+	inboxCh      chan eventDispatcherMessage
 	inboxFullOnce sync.Once
 	closeOnce     sync.Once
 	loggers       ldlog.Loggers
+	eventMetrics  EventMetrics
 }
 
 type eventDispatcher struct {
@@ -76,8 +77,9 @@ func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
 	inboxCh := make(chan eventDispatcherMessage, config.Capacity)
 	startEventDispatcher(config, inboxCh)
 	return &defaultEventProcessor{
-		inboxCh: inboxCh,
-		loggers: config.Loggers,
+		inboxCh:      inboxCh,
+		loggers:      config.Loggers,
+		eventMetrics: config.EventMetrics,
 	}
 }
 
@@ -136,6 +138,11 @@ func (ep *defaultEventProcessor) postNonBlockingMessageToInbox(e eventDispatcher
 	ep.inboxFullOnce.Do(func() { // COVERAGE: no way to simulate this condition in unit tests
 		ep.loggers.Warn("Events are being produced faster than they can be processed; some events will be dropped")
 	})
+	if ep.eventMetrics != nil {
+		if _, ok := e.(sendEventMessage); ok {
+			ep.eventMetrics.RecordDroppedEvents(1)
+		}
+	}
 }
 
 func (ep *defaultEventProcessor) Close() error {
@@ -157,7 +164,7 @@ func startEventDispatcher(
 ) {
 	ed := &eventDispatcher{
 		config:             config,
-		outbox:             newEventsOutbox(config.Capacity, config.Loggers),
+		outbox:             newEventsOutbox(config.Capacity, config.Loggers, config.EventMetrics),
 		flushCh:            make(chan *flushPayload, 1),
 		senderResultCh:     make(chan EventSenderResult, maxFlushWorkers),
 		workersGroup:       &sync.WaitGroup{},
@@ -516,6 +523,14 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)
 			if len(bytes) > 0 {
 				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, count)
+				if config.EventMetrics != nil {
+					if result.Success {
+						config.EventMetrics.RecordEventsSent(count)
+						config.EventMetrics.RecordEventsBytesSent(len(bytes))
+					} else {
+						config.EventMetrics.RecordEventsFailedSend(count)
+					}
+				}
 
 				select {
 				case <-ctx.Done():
