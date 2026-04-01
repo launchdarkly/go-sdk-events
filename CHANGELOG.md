@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.6.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.5.1...v3.6.0) (2026-04-01)
+
+
+### Features
+
+* Add EventMetrics interface for event processing telemetry ([#38](https://github.com/launchdarkly/go-sdk-events/issues/38)) ([9aec7dd](https://github.com/launchdarkly/go-sdk-events/commit/9aec7dd4c4c4a6063384b50573c6b73e3a3fc71c))
+
 ## [3.5.1](https://github.com/launchdarkly/go-sdk-events/compare/v3.5.0...v3.5.1) (2026-03-09)
 
 
