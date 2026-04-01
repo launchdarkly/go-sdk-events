@@ -216,8 +216,12 @@ func SendEventDataWithRetry(
 			// that doesn't mean subsequent payloads won't be small enough to
 			// succeed.
 			tooLarge := resp.StatusCode == http.StatusRequestEntityTooLarge
-			return EventSenderResult{MustShutDown: !tooLarge}
+			return EventSenderResult{MustShutDown: !tooLarge, StatusCode: resp.StatusCode}
 		}
+	}
+	// Retries exhausted — return the last status code if we had one
+	if resp != nil {
+		return EventSenderResult{StatusCode: resp.StatusCode}
 	}
 	return EventSenderResult{}
 }
