@@ -88,6 +88,17 @@ type EventMetrics interface {
 	RecordPendingEvents(count int)
 }
 
+// NoOpEventMetrics is a default implementation of EventMetrics that does nothing.
+// It is used when no EventMetrics is provided in EventsConfiguration, eliminating the
+// need for nil checks at every call site.
+type NoOpEventMetrics struct{}
+
+func (NoOpEventMetrics) RecordDroppedEvents(int)                              {}
+func (NoOpEventMetrics) RecordEventsSent(int)                                 {}
+func (NoOpEventMetrics) RecordEventsFailedSend(int, EventSendFailureMetadata) {}
+func (NoOpEventMetrics) RecordEventsBytesSent(int)                            {}
+func (NoOpEventMetrics) RecordPendingEvents(int)                              {}
+
 // EventSendFailureMetadata provides additional context about why an event batch failed to send.
 // This struct may be extended with additional fields in the future without breaking compatibility.
 type EventSendFailureMetadata struct {
