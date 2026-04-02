@@ -74,6 +74,9 @@ const (
 
 // NewDefaultEventProcessor creates an instance of the default implementation of analytics event processing.
 func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
+	if config.EventMetrics == nil {
+		config.EventMetrics = NoOpEventMetrics{}
+	}
 	inboxCh := make(chan eventDispatcherMessage, config.Capacity)
 	startEventDispatcher(config, inboxCh)
 	return &defaultEventProcessor{
@@ -138,10 +141,8 @@ func (ep *defaultEventProcessor) postNonBlockingMessageToInbox(e eventDispatcher
 	ep.inboxFullOnce.Do(func() { // COVERAGE: no way to simulate this condition in unit tests
 		ep.loggers.Warn("Events are being produced faster than they can be processed; some events will be dropped")
 	})
-	if ep.eventMetrics != nil {
-		if _, ok := e.(sendEventMessage); ok {
-			ep.eventMetrics.RecordDroppedEvents(1)
-		}
+	if _, ok := e.(sendEventMessage); ok {
+		ep.eventMetrics.RecordDroppedEvents(1)
 	}
 }
 
@@ -523,15 +524,13 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)
 			if len(bytes) > 0 {
 				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, count)
-				if config.EventMetrics != nil {
-					if result.Success {
-						config.EventMetrics.RecordEventsSent(count)
-						config.EventMetrics.RecordEventsBytesSent(len(bytes))
-					} else {
-						config.EventMetrics.RecordEventsFailedSend(count, EventSendFailureMetadata{
-							StatusCode: result.StatusCode,
-						})
-					}
+				if result.Success {
+					config.EventMetrics.RecordEventsSent(count)
+					config.EventMetrics.RecordEventsBytesSent(len(bytes))
+				} else {
+					config.EventMetrics.RecordEventsFailedSend(count, EventSendFailureMetadata{
+						StatusCode: result.StatusCode,
+					})
 				}
 
 				select {

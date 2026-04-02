@@ -31,16 +31,12 @@ func (b *eventsOutbox) addEvent(event anyEventInput) {
 			b.loggers.Warn("Exceeded event queue capacity. Increase capacity to avoid dropping events.")
 		}
 		b.droppedEvents++
-		if b.eventMetrics != nil {
-			b.eventMetrics.RecordDroppedEvents(1)
-		}
+		b.eventMetrics.RecordDroppedEvents(1)
 		return
 	}
 	b.capacityExceeded = false
 	b.events = append(b.events, event)
-	if b.eventMetrics != nil {
-		b.eventMetrics.RecordPendingEvents(len(b.events))
-	}
+	b.eventMetrics.RecordPendingEvents(len(b.events))
 }
 
 func (b *eventsOutbox) addToSummary(ed EvaluationData) {
@@ -66,7 +62,5 @@ func (b *eventsOutbox) clear() {
 	}
 	b.events = b.events[0:0]
 	b.summarizer.reset()
-	if b.eventMetrics != nil {
-		b.eventMetrics.RecordPendingEvents(0)
-	}
+	b.eventMetrics.RecordPendingEvents(0)
 }
