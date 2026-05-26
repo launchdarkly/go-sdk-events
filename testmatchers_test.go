@@ -3,10 +3,10 @@ package ldevents
 import (
 	"encoding/json"
 
-	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
-	"github.com/launchdarkly/go-sdk-common/v3/ldreason"
-	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
-	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v4/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v4/ldreason"
+	"github.com/launchdarkly/go-sdk-common/v4/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v4/ldvalue"
 
 	"github.com/launchdarkly/go-test-helpers/v3/jsonhelpers"
 	m "github.com/launchdarkly/go-test-helpers/v3/matchers"
