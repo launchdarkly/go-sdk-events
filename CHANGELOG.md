@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.6.1](https://github.com/launchdarkly/go-sdk-events/compare/v3.6.0...v3.6.1) (2026-05-28)
+
+
+### Bug Fixes
+
+* bump go-jsonstream and go-sdk-common for EasyJSON removal ([#43](https://github.com/launchdarkly/go-sdk-events/issues/43)) ([7353d52](https://github.com/launchdarkly/go-sdk-events/commit/7353d528f9e7eb6ef158f3243d231beccb22c357))
+
 ## [3.6.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.5.1...v3.6.0) (2026-04-01)
 
 
