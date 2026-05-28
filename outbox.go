@@ -1,7 +1,7 @@
 package ldevents
 
 import (
-	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v4/ldlog"
 )
 
 type eventsOutbox struct {

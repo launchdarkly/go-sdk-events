@@ -3,11 +3,11 @@ package ldevents
 import (
 	"testing"
 
-	"github.com/launchdarkly/go-sdk-common/v3/ldattr"
-	"github.com/launchdarkly/go-sdk-common/v3/ldreason"
-	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
-	"github.com/launchdarkly/go-sdk-common/v3/lduser"
-	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v4/ldattr"
+	"github.com/launchdarkly/go-sdk-common/v4/ldreason"
+	"github.com/launchdarkly/go-sdk-common/v4/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v4/lduser"
+	"github.com/launchdarkly/go-sdk-common/v4/ldvalue"
 )
 
 func BenchmarkEventOutputFormatterBasicEvents(b *testing.B) {
