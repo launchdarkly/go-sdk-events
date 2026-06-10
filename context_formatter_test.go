@@ -5,11 +5,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/launchdarkly/go-sdk-common/v4/ldattr"
-	"github.com/launchdarkly/go-sdk-common/v4/ldcontext"
-	"github.com/launchdarkly/go-sdk-common/v4/ldvalue"
+	"github.com/launchdarkly/go-sdk-common/v3/ldattr"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 
-	"github.com/launchdarkly/go-jsonstream/v4/jwriter"
+	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-test-helpers/v3/jsonhelpers"
 
 	"github.com/stretchr/testify/assert"

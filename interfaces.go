@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/launchdarkly/go-sdk-common/v4/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 )
 
 // EventProcessor defines the interface for dispatching analytics events.
