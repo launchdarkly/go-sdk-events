@@ -19,7 +19,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// v3.6.1 upgraded to the go-jsonstream/v4 and go-sdk-common/v4 core libraries.
-// Those /v4 major bumps are a breaking change for customers (Go semantic import
-// versioning), so v3.6.1 is retracted in favor of a v3-only release. See SDK-2496.
-retract v3.6.1
+retract v3.6.1 // Introduced unintentional breaking changes; use version v3.6.2 or later.
