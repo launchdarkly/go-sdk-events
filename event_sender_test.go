@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/launchdarkly/go-sdk-common/v4/ldlog"
-	"github.com/launchdarkly/go-sdk-common/v4/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
 
 	"github.com/launchdarkly/go-test-helpers/v3/httphelpers"
 

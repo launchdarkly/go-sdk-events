@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/launchdarkly/go-jsonstream/v4/jwriter"
-	"github.com/launchdarkly/go-sdk-common/v4/ldcontext"
-	"github.com/launchdarkly/go-sdk-common/v4/ldlog"
-	"github.com/launchdarkly/go-sdk-common/v4/ldsampling"
-	"github.com/launchdarkly/go-sdk-common/v4/ldtime"
-	"github.com/launchdarkly/go-sdk-common/v4/ldvalue"
+	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
+	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldlog"
+	"github.com/launchdarkly/go-sdk-common/v3/ldsampling"
+	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 )
 
 // anyEventInput and anyEventOutput only exist to make it a little clearer in the code whether we're referring
