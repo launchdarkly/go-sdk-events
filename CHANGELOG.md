@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.6.2](https://github.com/launchdarkly/go-sdk-events/compare/v3.6.1...v3.6.2) (2026-06-11)
+
+
+### Bug Fixes
+
+* **deps:** revert v4 core libraries to v3 ([#45](https://github.com/launchdarkly/go-sdk-events/issues/45)) ([ba9ed6e](https://github.com/launchdarkly/go-sdk-events/commit/ba9ed6ef677583181ba8f5b38dc32e2fd51b488f))
+
 ## [3.6.1](https://github.com/launchdarkly/go-sdk-events/compare/v3.6.0...v3.6.1) (2026-05-28)
 
 
