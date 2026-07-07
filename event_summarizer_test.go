@@ -64,22 +64,22 @@ func TestSummarizeEventIncrementsCounters(t *testing.T) {
 			defaultValue: ldvalue.String("default1"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
 			counters: map[counterKey]*counterValue{
-				{variation1, flagVersion1}: {2, ldvalue.String("value1")},
-				{variation2, flagVersion1}: {1, ldvalue.String("value2")},
+				{variation: variation1, version: flagVersion1}: {2, ldvalue.String("value1")},
+				{variation: variation2, version: flagVersion1}: {1, ldvalue.String("value2")},
 			},
 		},
 		flagKey2: {
 			defaultValue: ldvalue.String("default2"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
 			counters: map[counterKey]*counterValue{
-				{variation1, flagVersion2}: {1, ldvalue.String("value99")},
+				{variation: variation1, version: flagVersion2}: {1, ldvalue.String("value99")},
 			},
 		},
 		unknownFlagKey: {
 			defaultValue: ldvalue.String("default3"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
 			counters: map[counterKey]*counterValue{
-				{undefInt, undefInt}: {1, ldvalue.String("default3")},
+				{variation: undefInt, version: undefInt}: {1, ldvalue.String("default3")},
 			},
 		},
 	}
@@ -104,9 +104,36 @@ func TestCounterForNilVariationIsDistinctFromOthers(t *testing.T) {
 			defaultValue: ldvalue.String("default1"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
 			counters: map[counterKey]*counterValue{
-				{variation1, flagVersion}: {1, ldvalue.String("value1")},
-				{variation2, flagVersion}: {1, ldvalue.String("value2")},
-				{undefInt, flagVersion}:   {1, ldvalue.String("default1")},
+				{variation: variation1, version: flagVersion}: {1, ldvalue.String("value1")},
+				{variation: variation2, version: flagVersion}: {1, ldvalue.String("value2")},
+				{variation: undefInt, version: flagVersion}:   {1, ldvalue.String("default1")},
+			},
+		},
+	}
+	assert.Equal(t, expectedFlags, data.flags)
+}
+
+func TestCounterForOverrideIsDistinctFromNonOverride(t *testing.T) {
+	es := newEventSummarizer()
+	flagKey := "key1"
+	flagVersion := ldvalue.NewOptionalInt(11)
+	variation := ldvalue.NewOptionalInt(1)
+	event1 := makeEvalEvent(0, flagKey, flagVersion, variation, "value1", "default1")
+	event2 := makeEvalEvent(0, flagKey, flagVersion, variation, "value1", "default1")
+	event2.IsOverride = true
+	event3 := makeEvalEvent(0, flagKey, flagVersion, variation, "value1", "default1")
+	for _, e := range []EvaluationData{event1, event2, event3} {
+		es.summarizeEvent(e)
+	}
+	data := es.snapshot()
+
+	expectedFlags := map[string]flagSummary{
+		flagKey: {
+			defaultValue: ldvalue.String("default1"),
+			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
+			counters: map[counterKey]*counterValue{
+				{variation: variation, version: flagVersion}:                 {2, ldvalue.String("value1")},
+				{variation: variation, version: flagVersion, override: true}: {1, ldvalue.String("value1")},
 			},
 		},
 	}
@@ -134,15 +161,15 @@ func TestSummaryContextKindsAreTrackedPerFlag(t *testing.T) {
 			defaultValue: ldvalue.String("default1"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}, "org": {}},
 			counters: map[counterKey]*counterValue{
-				{variation1, flagVersion1}: {2, ldvalue.String("value1")},
-				{variation2, flagVersion1}: {1, ldvalue.String("value2")},
+				{variation: variation1, version: flagVersion1}: {2, ldvalue.String("value1")},
+				{variation: variation2, version: flagVersion1}: {1, ldvalue.String("value2")},
 			},
 		},
 		flagKey2: {
 			defaultValue: ldvalue.String("default2"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
 			counters: map[counterKey]*counterValue{
-				{variation1, flagVersion2}: {1, ldvalue.String("value99")},
+				{variation: variation1, version: flagVersion2}: {1, ldvalue.String("value99")},
 			},
 		},
 	}

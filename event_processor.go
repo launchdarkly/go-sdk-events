@@ -324,8 +324,10 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			ed.outbox.addToSummary(evt)
 		}
 
-		willAddFullEvent = evt.RequireFullEvent
-		if ed.shouldDebugEvent(&evt) {
+		// Evaluations of override-supplied flag definitions are represented only in the
+		// summary counters, never as individual evaluation or debug events.
+		willAddFullEvent = evt.RequireFullEvent && !evt.IsOverride
+		if !evt.IsOverride && ed.shouldDebugEvent(&evt) {
 			de := evt
 			de.debug = true
 			debugEvent = de
