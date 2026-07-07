@@ -220,6 +220,7 @@ func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eve
 			} else {
 				counterObj.Name("unknown").Bool(true)
 			}
+			counterObj.Maybe("override", counterKey.override).Bool(counterKey.override)
 			counterValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
 			counterObj.Name("count").Int(counterValue.count)
 			counterObj.End()

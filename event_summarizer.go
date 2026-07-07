@@ -29,6 +29,7 @@ type flagSummary struct {
 type counterKey struct {
 	variation ldvalue.OptionalInt
 	version   ldvalue.OptionalInt
+	override  bool
 }
 
 type counterValue struct {
@@ -62,7 +63,7 @@ func (s *eventSummarizer) summarizeEvent(ed EvaluationData) {
 		s.eventsState.flags[ed.Key] = flag
 	}
 
-	counterKey := counterKey{variation: ed.Variation, version: ed.Version}
+	counterKey := counterKey{variation: ed.Variation, version: ed.Version, override: ed.IsOverride}
 	if value, ok := flag.counters[counterKey]; ok {
 		value.count++
 	} else {

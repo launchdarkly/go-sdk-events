@@ -77,6 +77,10 @@ type EvaluationData struct {
 	ForceSampling bool
 	// ExcludeFromSummaries determines if the event should be included in summary calculations.
 	ExcludeFromSummaries bool
+	// IsOverride is true if the flag definition that was evaluated came from an SDK override source
+	// rather than from LaunchDarkly. Override evaluations are aggregated into separate summary
+	// counters carrying an override marker, and do not produce individual evaluation or debug events.
+	IsOverride bool
 	// debug is true if this is a copy of an evaluation event that we have queued to be output as a debug
 	// event. This field is not exported because it is never part of the input parameters from the application;
 	// we debug events only internally, based on DebugEventsUntilDate.
@@ -155,6 +159,9 @@ type FlagEventProperties struct {
 	// DebugEventsUntilDate is non-zero if event debugging has been temporarily enabled for the flag. It is the
 	// time at which debugging mode should expire.
 	DebugEventsUntilDate ldtime.UnixMillisecondTime
+	// IsOverride is true if the flag definition came from an SDK override source rather than from
+	// LaunchDarkly.
+	IsOverride bool
 }
 
 // EventFactory is a configurable factory for event objects.
@@ -229,6 +236,7 @@ func (f EventFactory) NewEvaluationData(
 		DebugEventsUntilDate: flagProps.DebugEventsUntilDate,
 		SamplingRatio:        samplingRatio,
 		ExcludeFromSummaries: excludeFromSummaries,
+		IsOverride:           flagProps.IsOverride,
 	}
 	if f.includeReasons || isExperiment {
 		ed.Reason = detail.Reason
