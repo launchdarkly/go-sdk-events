@@ -4,8 +4,8 @@ go 1.24
 
 require (
 	github.com/google/uuid v1.1.1
-	github.com/launchdarkly/go-jsonstream/v3 v3.1.1
-	github.com/launchdarkly/go-sdk-common/v3 v3.5.0
+	github.com/launchdarkly/go-jsonstream/v3 v3.1.2
+	github.com/launchdarkly/go-sdk-common/v3 v3.5.1
 	github.com/launchdarkly/go-test-helpers/v3 v3.0.1
 	github.com/stretchr/testify v1.7.0
 )
