@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.6.3](https://github.com/launchdarkly/go-sdk-events/compare/v3.6.2...v3.6.3) (2026-08-14)
+
+
+### Bug Fixes
+
+* upgrade go-jsonstream to v3.1.2 and go-sdk-common to v3.5.1 ([#57](https://github.com/launchdarkly/go-sdk-events/issues/57)) ([597de6a](https://github.com/launchdarkly/go-sdk-events/commit/597de6a56f84bf0f262b34f04e50d8d0cb853c29))
+
 ## [3.6.2](https://github.com/launchdarkly/go-sdk-events/compare/v3.6.1...v3.6.2) (2026-06-11)
 
 
