@@ -410,6 +410,55 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 	})
 }
 
+func TestIndividualFeatureEventIsNotQueuedForOverrideEvaluation(t *testing.T) {
+	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
+		ep, es := createEventProcessorAndSender(config)
+		defer ep.Close()
+
+		context := basicContext()
+		flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true, IsOverride: true}
+		fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+		require.True(t, fe.IsOverride)
+		ep.RecordEvaluation(fe)
+		ep.Flush()
+
+		// The evaluation is still summarized (in an override-marked counter) and still produces an
+		// index event, but no individual feature event even though RequireFullEvent is true.
+		assertEventsReceived(t, es,
+			anyIndexEvent(),
+			summaryEventWithFlag(flag,
+				append(summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1),
+					m.JSONProperty("override").Should(m.Equal(true)))),
+		)
+		es.assertNoMoreEvents(t)
+	})
+}
+
+func TestDebugEventIsNotAddedForOverrideEvaluation(t *testing.T) {
+	fakeTimeNow := ldtime.UnixMillisecondTime(1000000)
+	config := basicConfigWithoutPrivateAttrs()
+	config.currentTimeProvider = func() ldtime.UnixMillisecondTime { return fakeTimeNow }
+	eventFactory := NewEventFactory(false, config.currentTimeProvider)
+
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	context := basicContext()
+	futureTime := fakeTimeNow + 100
+	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: futureTime, IsOverride: true}
+	fe := eventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	ep.RecordEvaluation(fe)
+	ep.Flush()
+
+	assertEventsReceived(t, es,
+		anyIndexEvent(),
+		summaryEventWithFlag(flag,
+			append(summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1),
+				m.JSONProperty("override").Should(m.Equal(true)))),
+	)
+	es.assertNoMoreEvents(t)
+}
+
 func TestIndividualFeatureEventHasContextAttributesRedactedIfAnonymous(t *testing.T) {
 	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 		ep, es := createEventProcessorAndSender(config)
