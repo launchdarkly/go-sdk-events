@@ -113,14 +113,14 @@ func TestCounterForNilVariationIsDistinctFromOthers(t *testing.T) {
 	assert.Equal(t, expectedFlags, data.flags)
 }
 
-func TestCounterForOverrideIsDistinctFromNonOverride(t *testing.T) {
+func TestCounterForOverrideAffectedEvaluationIsDistinctFromUnmarked(t *testing.T) {
 	es := newEventSummarizer()
 	flagKey := "key1"
 	flagVersion := ldvalue.NewOptionalInt(11)
 	variation := ldvalue.NewOptionalInt(1)
 	event1 := makeEvalEvent(0, flagKey, flagVersion, variation, "value1", "default1")
 	event2 := makeEvalEvent(0, flagKey, flagVersion, variation, "value1", "default1")
-	event2.IsOverride = true
+	event2.OverrideAffected = true
 	event3 := makeEvalEvent(0, flagKey, flagVersion, variation, "value1", "default1")
 	for _, e := range []EvaluationData{event1, event2, event3} {
 		es.summarizeEvent(e)
@@ -132,8 +132,8 @@ func TestCounterForOverrideIsDistinctFromNonOverride(t *testing.T) {
 			defaultValue: ldvalue.String("default1"),
 			contextKinds: map[ldcontext.Kind]struct{}{ldcontext.DefaultKind: {}},
 			counters: map[counterKey]*counterValue{
-				{variation: variation, version: flagVersion}:                 {2, ldvalue.String("value1")},
-				{variation: variation, version: flagVersion, override: true}: {1, ldvalue.String("value1")},
+				{variation: variation, version: flagVersion}:                         {2, ldvalue.String("value1")},
+				{variation: variation, version: flagVersion, overrideAffected: true}: {1, ldvalue.String("value1")},
 			},
 		},
 	}

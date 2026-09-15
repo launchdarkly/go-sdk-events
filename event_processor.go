@@ -324,10 +324,10 @@ func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 			ed.outbox.addToSummary(evt)
 		}
 
-		// Evaluations of override-supplied flag definitions are represented only in the
-		// summary counters, never as individual evaluation or debug events.
-		willAddFullEvent = evt.RequireFullEvent && !evt.IsOverride
-		if !evt.IsOverride && ed.shouldDebugEvent(&evt) {
+		// An override-affected evaluation appears only in the summary counters. It produces no
+		// individual feature event and no debug event, regardless of the flag's configuration.
+		willAddFullEvent = evt.RequireFullEvent && !evt.OverrideAffected
+		if !evt.OverrideAffected && ed.shouldDebugEvent(&evt) {
 			de := evt
 			de.debug = true
 			debugEvent = de

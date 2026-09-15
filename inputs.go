@@ -77,10 +77,13 @@ type EvaluationData struct {
 	ForceSampling bool
 	// ExcludeFromSummaries determines if the event should be included in summary calculations.
 	ExcludeFromSummaries bool
-	// IsOverride is true if the flag definition that was evaluated came from an SDK override source
-	// rather than from LaunchDarkly. Override evaluations are aggregated into separate summary
-	// counters carrying an override marker, and do not produce individual evaluation or debug events.
-	IsOverride bool
+	// OverrideAffected is true if an override affected this evaluation. The override can be direct
+	// or transitive. It is direct when the evaluated flag came from the SDK's override store. It is
+	// transitive when a prerequisite at any depth, or a segment read during the evaluation, came
+	// from that store. The caller sets this field. Event generation does not read the evaluation
+	// reason. A marked evaluation produces no individual feature event and no debug event. The
+	// summarizer counts it in a separate counter that carries the overrideAffected marker.
+	OverrideAffected bool
 	// debug is true if this is a copy of an evaluation event that we have queued to be output as a debug
 	// event. This field is not exported because it is never part of the input parameters from the application;
 	// we debug events only internally, based on DebugEventsUntilDate.
@@ -159,9 +162,12 @@ type FlagEventProperties struct {
 	// DebugEventsUntilDate is non-zero if event debugging has been temporarily enabled for the flag. It is the
 	// time at which debugging mode should expire.
 	DebugEventsUntilDate ldtime.UnixMillisecondTime
-	// IsOverride is true if the flag definition came from an SDK override source rather than from
-	// LaunchDarkly.
-	IsOverride bool
+	// OverrideAffected is true if an override affected the evaluation of this flag. The override
+	// can be direct or transitive. It is direct when the flag came from the SDK's override store.
+	// It is transitive when a prerequisite at any depth, or a segment read during the evaluation,
+	// came from that store. The caller sets this field. Event generation does not read the
+	// evaluation reason. The value is copied to EvaluationData.OverrideAffected.
+	OverrideAffected bool
 }
 
 // EventFactory is a configurable factory for event objects.
@@ -236,7 +242,7 @@ func (f EventFactory) NewEvaluationData(
 		DebugEventsUntilDate: flagProps.DebugEventsUntilDate,
 		SamplingRatio:        samplingRatio,
 		ExcludeFromSummaries: excludeFromSummaries,
-		IsOverride:           flagProps.IsOverride,
+		OverrideAffected:     flagProps.OverrideAffected,
 	}
 	if f.includeReasons || isExperiment {
 		ed.Reason = detail.Reason
