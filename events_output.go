@@ -220,6 +220,8 @@ func (ef eventOutputFormatter) writeSummaryEvent(w *jwriter.Writer, snapshot eve
 			} else {
 				counterObj.Name("unknown").Bool(true)
 			}
+			// The overrideAffected marker is present only when true, like the unknown marker.
+			counterObj.Maybe("overrideAffected", counterKey.overrideAffected).Bool(counterKey.overrideAffected)
 			counterValue.flagValue.WriteToJSONWriter(counterObj.Name("value"))
 			counterObj.Name("count").Int(counterValue.count)
 			counterObj.End()
