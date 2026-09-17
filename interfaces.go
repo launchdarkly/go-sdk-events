@@ -88,6 +88,47 @@ type EventMetrics interface {
 	RecordPendingEvents(count int)
 }
 
+// EventFlushResult describes the outcome of one attempt to deliver a batch of analytics events.
+//
+// This struct may be extended with additional fields in the future without breaking compatibility.
+type EventFlushResult struct {
+	// EventCount is the number of events in the batch. A summary event counts as one event.
+	EventCount int
+	// PayloadBytes is the size of the serialized payload before compression.
+	PayloadBytes int
+	// Success is true if the events service accepted the payload.
+	Success bool
+	// StatusCode is the HTTP status code of the last response, or 0 if no response was received.
+	StatusCode int
+	// Duration is the total time spent on the delivery attempt, including any retry.
+	Duration time.Duration
+}
+
+// FlushMetrics is an optional extension of EventMetrics. If the EventMetrics implementation also
+// implements FlushMetrics, RecordFlush is called once for each delivery attempt, in addition to
+// the RecordEventsSent, RecordEventsBytesSent, or RecordEventsFailedSend calls.
+type FlushMetrics interface {
+	// RecordFlush is called after each attempt to deliver a batch of analytics events.
+	RecordFlush(result EventFlushResult)
+}
+
+// DroppedEventsReason identifies why the event processor discarded events.
+type DroppedEventsReason string
+
+const (
+	// DroppedEventsReasonCapacity means the outbox reached its configured capacity before a flush.
+	DroppedEventsReasonCapacity DroppedEventsReason = "capacity"
+	// DroppedEventsReasonBackpressure means events arrived faster than the dispatcher could accept them.
+	DroppedEventsReasonBackpressure DroppedEventsReason = "backpressure"
+)
+
+// DropMetrics is an optional extension of EventMetrics. If the EventMetrics implementation also
+// implements DropMetrics, RecordDroppedEventsWithReason is called in addition to RecordDroppedEvents.
+type DropMetrics interface {
+	// RecordDroppedEventsWithReason is called when events are discarded, with the reason.
+	RecordDroppedEventsWithReason(count int, reason DroppedEventsReason)
+}
+
 // NoOpEventMetrics is a default implementation of EventMetrics that does nothing.
 // It is used when no EventMetrics is provided in EventsConfiguration, eliminating the
 // need for nil checks at every call site.

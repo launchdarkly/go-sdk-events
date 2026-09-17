@@ -12,15 +12,18 @@ type eventsOutbox struct {
 	droppedEvents    int
 	loggers          ldlog.Loggers
 	eventMetrics     EventMetrics
+	dropMetrics      DropMetrics // nil if eventMetrics does not implement DropMetrics
 }
 
 func newEventsOutbox(capacity int, loggers ldlog.Loggers, eventMetrics EventMetrics) *eventsOutbox {
+	dropMetrics, _ := eventMetrics.(DropMetrics)
 	return &eventsOutbox{
 		events:       make([]anyEventOutput, 0, capacity),
 		summarizer:   newEventSummarizer(),
 		capacity:     capacity,
 		loggers:      loggers,
 		eventMetrics: eventMetrics,
+		dropMetrics:  dropMetrics,
 	}
 }
 
@@ -32,6 +35,9 @@ func (b *eventsOutbox) addEvent(event anyEventInput) {
 		}
 		b.droppedEvents++
 		b.eventMetrics.RecordDroppedEvents(1)
+		if b.dropMetrics != nil {
+			b.dropMetrics.RecordDroppedEventsWithReason(1, DroppedEventsReasonCapacity)
+		}
 		return
 	}
 	b.capacityExceeded = false

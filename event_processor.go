@@ -20,11 +20,12 @@ type anyEventInput interface{}
 type anyEventOutput interface{}
 
 type defaultEventProcessor struct {
-	inboxCh      chan eventDispatcherMessage
+	inboxCh       chan eventDispatcherMessage
 	inboxFullOnce sync.Once
 	closeOnce     sync.Once
 	loggers       ldlog.Loggers
 	eventMetrics  EventMetrics
+	dropMetrics   DropMetrics // nil if eventMetrics does not implement DropMetrics
 }
 
 type eventDispatcher struct {
@@ -79,10 +80,12 @@ func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
 	}
 	inboxCh := make(chan eventDispatcherMessage, config.Capacity)
 	startEventDispatcher(config, inboxCh)
+	dropMetrics, _ := config.EventMetrics.(DropMetrics)
 	return &defaultEventProcessor{
 		inboxCh:      inboxCh,
 		loggers:      config.Loggers,
 		eventMetrics: config.EventMetrics,
+		dropMetrics:  dropMetrics,
 	}
 }
 
@@ -143,6 +146,9 @@ func (ep *defaultEventProcessor) postNonBlockingMessageToInbox(e eventDispatcher
 	})
 	if _, ok := e.(sendEventMessage); ok {
 		ep.eventMetrics.RecordDroppedEvents(1)
+		if ep.dropMetrics != nil {
+			ep.dropMetrics.RecordDroppedEventsWithReason(1, DroppedEventsReasonBackpressure)
+		}
 	}
 }
 
@@ -185,10 +191,12 @@ func startEventDispatcher(
 
 	ctx, workerCancelFunc := context.WithCancel(context.Background())
 
+	flushMetrics, _ := config.EventMetrics.(FlushMetrics)
+
 	// Start a fixed-size pool of workers that wait on flushTriggerCh. This is the
 	// maximum number of flushes we can do concurrently.
 	for i := 0; i < maxFlushWorkers; i++ {
-		go runFlushTask(ctx, config, formatter, ed.flushCh, ed.workersGroup, ed.senderResultCh)
+		go runFlushTask(ctx, config, formatter, ed.flushCh, ed.workersGroup, ed.senderResultCh, flushMetrics)
 	}
 	if config.DiagnosticsManager != nil {
 		event := config.DiagnosticsManager.CreateInitEvent()
@@ -508,7 +516,7 @@ func (ed *eventDispatcher) contextForIndexOrIdentify(eventContext EventInputCont
 }
 
 func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
-	workersGroup *sync.WaitGroup, senderResultCh chan<- EventSenderResult) {
+	workersGroup *sync.WaitGroup, senderResultCh chan<- EventSenderResult, flushMetrics FlushMetrics) {
 	for {
 		payload, more := <-flushCh
 		if !more {
@@ -523,6 +531,7 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 		} else {
 			bytes, count := formatter.makeOutputEvents(payload.events, payload.summary)
 			if len(bytes) > 0 {
+				startTime := time.Now()
 				result := config.EventSender.SendEventData(AnalyticsEventDataKind, bytes, count)
 				if result.Success {
 					config.EventMetrics.RecordEventsSent(count)
@@ -530,6 +539,15 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 				} else {
 					config.EventMetrics.RecordEventsFailedSend(count, EventSendFailureMetadata{
 						StatusCode: result.StatusCode,
+					})
+				}
+				if flushMetrics != nil {
+					flushMetrics.RecordFlush(EventFlushResult{
+						EventCount:   count,
+						PayloadBytes: len(bytes),
+						Success:      result.Success,
+						StatusCode:   result.StatusCode,
+						Duration:     time.Since(startTime),
 					})
 				}
 
