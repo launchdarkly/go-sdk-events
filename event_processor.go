@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
@@ -25,12 +26,15 @@ type defaultEventProcessor struct {
 	closeOnce     sync.Once
 	loggers       ldlog.Loggers
 	eventMetrics  EventMetrics
-	dropMetrics   DropMetrics // nil if eventMetrics does not implement DropMetrics
+	// inboxDropped counts events discarded because the inbox was full. The dispatcher folds it into
+	// the next flush payload.
+	inboxDropped *atomic.Int64
 }
 
 type eventDispatcher struct {
 	config               EventsConfiguration
 	outbox               *eventsOutbox
+	inboxDropped         *atomic.Int64
 	flushCh              chan *flushPayload
 	senderResultCh       chan EventSenderResult
 	workersGroup         *sync.WaitGroup
@@ -48,6 +52,8 @@ type flushPayload struct {
 	events          []anyEventOutput
 	summary         eventSummary
 	completed       chan struct{}
+	// droppedCount is the number of events discarded since the previous flush payload was started.
+	droppedCount int
 }
 
 // Payload of the inboxCh channel.
@@ -79,13 +85,13 @@ func NewDefaultEventProcessor(config EventsConfiguration) EventProcessor {
 		config.EventMetrics = NoOpEventMetrics{}
 	}
 	inboxCh := make(chan eventDispatcherMessage, config.Capacity)
-	startEventDispatcher(config, inboxCh)
-	dropMetrics, _ := config.EventMetrics.(DropMetrics)
+	inboxDropped := &atomic.Int64{}
+	startEventDispatcher(config, inboxCh, inboxDropped)
 	return &defaultEventProcessor{
 		inboxCh:      inboxCh,
 		loggers:      config.Loggers,
 		eventMetrics: config.EventMetrics,
-		dropMetrics:  dropMetrics,
+		inboxDropped: inboxDropped,
 	}
 }
 
@@ -145,10 +151,8 @@ func (ep *defaultEventProcessor) postNonBlockingMessageToInbox(e eventDispatcher
 		ep.loggers.Warn("Events are being produced faster than they can be processed; some events will be dropped")
 	})
 	if _, ok := e.(sendEventMessage); ok {
+		ep.inboxDropped.Add(1)
 		ep.eventMetrics.RecordDroppedEvents(1)
-		if ep.dropMetrics != nil {
-			ep.dropMetrics.RecordDroppedEventsWithReason(1, DroppedEventsReasonBackpressure)
-		}
 	}
 }
 
@@ -168,10 +172,12 @@ func (ep *defaultEventProcessor) Close() error {
 func startEventDispatcher(
 	config EventsConfiguration,
 	inboxCh <-chan eventDispatcherMessage,
+	inboxDropped *atomic.Int64,
 ) {
 	ed := &eventDispatcher{
 		config:             config,
 		outbox:             newEventsOutbox(config.Capacity, config.Loggers, config.EventMetrics),
+		inboxDropped:       inboxDropped,
 		flushCh:            make(chan *flushPayload, 1),
 		senderResultCh:     make(chan EventSenderResult, maxFlushWorkers),
 		workersGroup:       &sync.WaitGroup{},
@@ -449,6 +455,10 @@ func (ed *eventDispatcher) triggerFlush(completed chan struct{}) {
 		ed.eventsInLastBatch = 0
 		return
 	}
+	// Drops since the previous flush travel with this payload. If the flush cannot start, they
+	// stay counted for the next attempt.
+	inboxDrops := ed.inboxDropped.Swap(0)
+	payload.droppedCount = ed.outbox.droppedSinceFlush + int(inboxDrops)
 	ed.workersGroup.Add(1) // Increment the count of active flushes
 	select {
 	case ed.flushCh <- &payload:
@@ -456,10 +466,12 @@ func (ed *eventDispatcher) triggerFlush(completed chan struct{}) {
 		// this flush payload and send it. The event outbox and summary state can now be
 		// cleared from the main goroutine.
 		ed.eventsInLastBatch = totalEventCount
+		ed.outbox.droppedSinceFlush = 0
 		ed.outbox.clear()
 	default:
 		// We can't start a flush right now because we're waiting for one of the workers
 		// to pick up the last one.  Do not reset the event outbox or summary state.
+		ed.inboxDropped.Add(inboxDrops)
 		ed.workersGroup.Done()
 	}
 }
@@ -548,6 +560,7 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 						Success:      result.Success,
 						StatusCode:   result.StatusCode,
 						Duration:     time.Since(startTime),
+						DroppedCount: payload.droppedCount,
 					})
 				}
 

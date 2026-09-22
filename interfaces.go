@@ -102,6 +102,10 @@ type EventFlushResult struct {
 	StatusCode int
 	// Duration is the total time spent on the delivery attempt, including any retry.
 	Duration time.Duration
+	// DroppedCount is the number of events discarded before delivery since the previous flush
+	// attempt, either because the outbox was at capacity or because the dispatcher could not accept
+	// them. Drops that happen while no flush is possible carry over to the next attempt.
+	DroppedCount int
 }
 
 // FlushMetrics is an optional extension of EventMetrics. If the EventMetrics implementation also
@@ -110,23 +114,6 @@ type EventFlushResult struct {
 type FlushMetrics interface {
 	// RecordFlush is called after each attempt to deliver a batch of analytics events.
 	RecordFlush(result EventFlushResult)
-}
-
-// DroppedEventsReason identifies why the event processor discarded events.
-type DroppedEventsReason string
-
-const (
-	// DroppedEventsReasonCapacity means the outbox reached its configured capacity before a flush.
-	DroppedEventsReasonCapacity DroppedEventsReason = "capacity"
-	// DroppedEventsReasonBackpressure means events arrived faster than the dispatcher could accept them.
-	DroppedEventsReasonBackpressure DroppedEventsReason = "backpressure"
-)
-
-// DropMetrics is an optional extension of EventMetrics. If the EventMetrics implementation also
-// implements DropMetrics, RecordDroppedEventsWithReason is called in addition to RecordDroppedEvents.
-type DropMetrics interface {
-	// RecordDroppedEventsWithReason is called when events are discarded, with the reason.
-	RecordDroppedEventsWithReason(count int, reason DroppedEventsReason)
 }
 
 // NoOpEventMetrics is a default implementation of EventMetrics that does nothing.
