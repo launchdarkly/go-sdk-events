@@ -436,6 +436,33 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 			}))
 	})
 
+	t.Run("summary - overrideAffected counters", func(t *testing.T) {
+		flag1v1Marked := flag1v1
+		flag1v1Marked.OverrideAffected = true
+
+		es := newEventSummarizer()
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1Marked, user,
+			ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false))
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user,
+			ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false))
+
+		bytes, count := formatter.makeOutputEvents(nil, es.snapshot())
+		require.Equal(t, 1, count)
+
+		// The overrideAffected marker appears only on the marked counter. The two counters stay
+		// separate even though the flag key, variation, and version are identical.
+		m.In(t).Assert(bytes, m.JSONArray().Should(m.Items(
+			m.JSONProperty("features").Should(m.JSONProperty("flag1").Should(
+				m.JSONProperty("counters").Should(m.ItemsInAnyOrder(
+					m.JSONEqual(json.RawMessage(`{"count":1,"value":"v","variation":1,"version":100,"overrideAffected":true}`)),
+					m.JSONEqual(json.RawMessage(`{"count":1,"value":"v","variation":1,"version":100}`)),
+				)),
+			)),
+		)))
+	})
+
 	t.Run("summary - multiple counters", func(t *testing.T) {
 		es := newEventSummarizer()
 		es.summarizeEvent(withoutReasons.NewEvaluationData(flag1v1, user, ldreason.NewEvaluationDetail(ldvalue.String("a"), 1, noReason),

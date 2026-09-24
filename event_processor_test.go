@@ -410,6 +410,89 @@ func TestIndividualFeatureEventIsQueuedWhenTrackEventsIsTrue(t *testing.T) {
 	})
 }
 
+func TestIndividualFeatureEventIsNotQueuedForOverrideAffectedEvaluation(t *testing.T) {
+	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
+		ep, es := createEventProcessorAndSender(config)
+		defer ep.Close()
+
+		context := basicContext()
+		flag := FlagEventProperties{Key: "flagkey", Version: 11, RequireFullEvent: true, OverrideAffected: true}
+		fe := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+		require.True(t, fe.OverrideAffected)
+		ep.RecordEvaluation(fe)
+		ep.Flush()
+
+		// The summary still counts the evaluation, in a counter that carries the overrideAffected
+		// marker, and the index event is still produced. There is no individual feature event even
+		// though RequireFullEvent is true.
+		assertEventsReceived(t, es,
+			anyIndexEvent(),
+			summaryEventWithFlag(flag,
+				append(summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1),
+					m.JSONProperty("overrideAffected").Should(m.Equal(true)))),
+		)
+		es.assertNoMoreEvents(t)
+	})
+}
+
+func TestDebugEventIsNotAddedForOverrideAffectedEvaluation(t *testing.T) {
+	fakeTimeNow := ldtime.UnixMillisecondTime(1000000)
+	config := basicConfigWithoutPrivateAttrs()
+	config.currentTimeProvider = func() ldtime.UnixMillisecondTime { return fakeTimeNow }
+	eventFactory := NewEventFactory(false, config.currentTimeProvider)
+
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	context := basicContext()
+	futureTime := fakeTimeNow + 100
+	flag := FlagEventProperties{Key: "flagkey", Version: 11, DebugEventsUntilDate: futureTime, OverrideAffected: true}
+	fe := eventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	ep.RecordEvaluation(fe)
+	ep.Flush()
+
+	// The flag is in debug mode, but the marked evaluation produces no debug event. The summary
+	// still counts it.
+	assertEventsReceived(t, es,
+		anyIndexEvent(),
+		summaryEventWithFlag(flag,
+			append(summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1),
+				m.JSONProperty("overrideAffected").Should(m.Equal(true)))),
+	)
+	es.assertNoMoreEvents(t)
+}
+
+func TestOverrideAffectedAndUnmarkedEvaluationsAreCountedSeparately(t *testing.T) {
+	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
+		ep, es := createEventProcessorAndSender(config)
+		defer ep.Close()
+
+		context := basicContext()
+		flag := FlagEventProperties{Key: "flagkey", Version: 11}
+		markedFlag := flag
+		markedFlag.OverrideAffected = true
+		unmarked := defaultEventFactory.NewEvaluationData(flag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+		marked := defaultEventFactory.NewEvaluationData(markedFlag, context, testEvalDetailWithoutReason, false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+		ep.RecordEvaluation(unmarked)
+		ep.RecordEvaluation(marked)
+		ep.RecordEvaluation(unmarked)
+		ep.Flush()
+
+		// The flag key, variation, and version are the same, but the marked evaluation accumulates
+		// in its own counter. The overrideAffected key is present only on the marked counter.
+		assertEventsReceived(t, es,
+			anyIndexEvent(),
+			summaryEventWithFlag(flag,
+				append(summaryCounterPropsFromEval(testEvalDetailWithoutReason, 2),
+					m.JSONOptProperty("overrideAffected").Should(m.JSONEqual(ldvalue.Null()))),
+				append(summaryCounterPropsFromEval(testEvalDetailWithoutReason, 1),
+					m.JSONProperty("overrideAffected").Should(m.Equal(true))),
+			),
+		)
+		es.assertNoMoreEvents(t)
+	})
+}
+
 func TestIndividualFeatureEventHasContextAttributesRedactedIfAnonymous(t *testing.T) {
 	withAndWithoutPrivateAttrs(t, func(t *testing.T, config EventsConfiguration) {
 		ep, es := createEventProcessorAndSender(config)
