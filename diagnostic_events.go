@@ -35,16 +35,17 @@ type DiagnosticsManager struct {
 // NewDiagnosticID creates a unique identifier for this SDK instance.
 func NewDiagnosticID(sdkKey string) ldvalue.Value {
 	uuid, _ := uuid.NewRandom()
-	var sdkKeySuffix string
-	if len(sdkKey) > 6 {
-		sdkKeySuffix = sdkKey[len(sdkKey)-6:]
-	} else {
-		sdkKeySuffix = sdkKey
-	}
 	return ldvalue.ObjectBuild().
 		SetString("diagnosticId", uuid.String()).
-		SetString("sdkKeySuffix", sdkKeySuffix).
+		SetString("sdkKeySuffix", sdkKeySuffix(sdkKey)).
 		Build()
+}
+
+func sdkKeySuffix(sdkKey string) string {
+	if len(sdkKey) > 6 {
+		return sdkKey[len(sdkKey)-6:]
+	}
+	return sdkKey
 }
 
 // NewDiagnosticsManager creates an instance of DiagnosticsManager.
@@ -82,6 +83,20 @@ func (m *DiagnosticsManager) RecordStreamInit(
 	})
 }
 
+// SetSDKKey replaces the SDK key suffix in the diagnostic ID. The diagnostic ID keeps its unique identifier.
+// Diagnostic events that the manager creates after this call contain the new suffix.
+//
+// This method is for internal use by the LaunchDarkly Relay Proxy only. It is not supported for other use.
+// It can change or be removed in any release without notice.
+func (m *DiagnosticsManager) SetSDKKey(sdkKey string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.id = ldvalue.ValueMapBuildFromMap(m.id.AsValueMap()).
+		Set("sdkKeySuffix", ldvalue.String(sdkKeySuffix(sdkKey))).
+		Build().
+		AsValue()
+}
+
 // CreateInitEvent is called by DefaultEventProcessor to create the initial diagnostics event that includes the
 // configuration.
 func (m *DiagnosticsManager) CreateInitEvent() ldvalue.Value {
@@ -95,9 +110,12 @@ func (m *DiagnosticsManager) CreateInitEvent() ldvalue.Value {
 		SetString("osArch", runtime.GOARCH).
 		Build()
 		// osVersion is not available, see above
+	m.lock.Lock()
+	id := m.id
+	m.lock.Unlock()
 	return ldvalue.ObjectBuild().
 		SetString("kind", "diagnostic-init").
-		Set("id", m.id).
+		Set("id", id).
 		SetFloat64("creationDate", float64(m.startTime)).
 		Set("sdk", m.sdkData).
 		Set("configuration", m.configData).
