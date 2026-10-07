@@ -1,6 +1,8 @@
 package ldevents
 
 import (
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,63 @@ func TestDiagnosticIDHasRandomID(t *testing.T) {
 func TestDiagnosticIDUsesLast6CharsOfSDKKey(t *testing.T) {
 	id := NewDiagnosticID("1234567890")
 	m.In(t).Assert(id, m.JSONProperty("sdkKeySuffix").Should(m.Equal("567890")))
+}
+
+func TestSetSDKKeyReplacesSuffixAndKeepsDiagnosticID(t *testing.T) {
+	id := NewDiagnosticID("old-key-111111")
+	dm := NewDiagnosticsManager(id, ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
+	dm.SetSDKKey("new-key-222222")
+
+	expectedID := ldvalue.ObjectBuild().
+		Set("diagnosticId", id.GetByKey("diagnosticId")).
+		SetString("sdkKeySuffix", "222222").
+		Build()
+	m.In(t).Assert(dm.CreateInitEvent(), m.JSONProperty("id").Should(m.JSONEqual(expectedID)))
+	m.In(t).Assert(dm.CreateStatsEventAndReset(0, 0, 0), m.JSONProperty("id").Should(m.JSONEqual(expectedID)))
+}
+
+func TestSetSDKKeyUsesWholeKeyWhenShorterThan6Chars(t *testing.T) {
+	dm := NewDiagnosticsManager(NewDiagnosticID("sdkkey"), ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
+	dm.SetSDKKey("abc")
+
+	m.In(t).Assert(dm.CreateStatsEventAndReset(0, 0, 0),
+		m.JSONProperty("id").Should(m.JSONProperty("sdkKeySuffix").Should(m.Equal("abc"))))
+}
+
+func TestSetSDKKeyDoesNotChangePendingStreamInits(t *testing.T) {
+	dm := NewDiagnosticsManager(NewDiagnosticID("sdkkey"), ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
+	dm.RecordStreamInit(10000, true, 100)
+	dm.SetSDKKey("new-key-222222")
+	dm.RecordStreamInit(20000, false, 50)
+	event := dm.CreateStatsEventAndReset(0, 0, 0)
+
+	m.In(t).Assert(event, m.AllOf(
+		m.JSONProperty("id").Should(m.JSONProperty("sdkKeySuffix").Should(m.Equal("222222"))),
+		m.JSONProperty("streamInits").Should(m.Items(
+			m.JSONStrEqual(`{"timestamp": 10000, "failed": true, "durationMillis": 100}`),
+			m.JSONStrEqual(`{"timestamp": 20000, "failed": false, "durationMillis": 50}`),
+		)),
+	))
+}
+
+func TestSetSDKKeyIsSafeDuringEventCreation(t *testing.T) {
+	dm := NewDiagnosticsManager(NewDiagnosticID("sdkkey"), ldvalue.Null(), ldvalue.Null(), time.Now(), nil)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			dm.SetSDKKey("key-" + strconv.Itoa(i))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			_ = dm.CreateInitEvent()
+			_ = dm.CreateStatsEventAndReset(0, 0, 0)
+		}
+	}()
+	wg.Wait()
 }
 
 func TestDiagnosticInitEventBaseProperties(t *testing.T) {
