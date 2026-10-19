@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.8.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.7.0...v3.8.0) (2026-10-19)
+
+
+### Features
+
+* Allow the SDK key suffix in the diagnostic ID to change at run time ([#63](https://github.com/launchdarkly/go-sdk-events/issues/63)) ([e44fa37](https://github.com/launchdarkly/go-sdk-events/commit/e44fa376ac74ef46dccdb2ccfb08c80d0fd4b2b9))
+
 ## [3.7.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.6.3...v3.7.0) (2026-09-24)
 
 
