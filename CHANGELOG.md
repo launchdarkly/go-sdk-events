@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.8.1](https://github.com/launchdarkly/go-sdk-events/compare/v3.8.0...v3.8.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* Redact an attribute that is private along with one of its own properties ([#66](https://github.com/launchdarkly/go-sdk-events/issues/66)) ([9c8e720](https://github.com/launchdarkly/go-sdk-events/commit/9c8e720742ade399a80cfaf51c23ad8e90d80590))
+
 ## [3.8.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.7.0...v3.8.0) (2026-10-19)
 
 
