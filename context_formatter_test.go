@@ -74,6 +74,17 @@ func TestEventContextFormatterConstructor(t *testing.T) {
 			},
 			f.privateAttributes)
 	})
+
+	t.Run("attribute private along with its own property", func(t *testing.T) {
+		parent, child := ldattr.NewRef("address"), ldattr.NewRef("/address/street")
+		for _, refs := range [][]ldattr.Ref{{child, parent}, {parent, child}} {
+			f := newEventContextFormatter(EventsConfiguration{PrivateAttributes: refs})
+			require.NotNil(t, f)
+
+			require.NotNil(t, f.privateAttributes["address"])
+			assert.Equal(t, &parent, f.privateAttributes["address"].attribute)
+		}
+	})
 }
 
 func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
@@ -117,6 +128,16 @@ func TestCheckGlobalPrivateAttrRefs(t *testing.T) {
 		expectResult(t, f, &attrRef2, false, "address", "street")
 		expectResult(t, f, &attrRef3, false, "address", "city")
 		expectResult(t, f, nil, false, "address", "zip")
+	})
+
+	t.Run("attribute private along with its own property", func(t *testing.T) {
+		parent, child := ldattr.NewRef("address"), ldattr.NewRef("/address/street")
+		for _, refs := range [][]ldattr.Ref{{child, parent}, {parent, child}} {
+			f := newEventContextFormatter(EventsConfiguration{PrivateAttributes: refs})
+			require.NotNil(t, f)
+
+			expectResult(t, f, &parent, false, "address")
+		}
 	})
 }
 
@@ -265,6 +286,28 @@ func TestEventContextFormatterOutput(t *testing.T) {
 			`{"kind": "org", "key": "my-key",
 				"name": "my-name", "address": {"state": "CA"},
 				"_meta": {"redactedAttributes": ["/address/city"]}}`,
+		},
+		{
+			"attribute private globally along with its own property, property listed first",
+			ldcontext.NewBuilder("my-key").Kind("org").
+				Name("my-name").
+				SetValue("address", objectValue).
+				Build(),
+			EventsConfiguration{PrivateAttributes: []ldattr.Ref{
+				ldattr.NewRef("/address/city"), ldattr.NewRef("/address")}},
+			`{"kind": "org", "key": "my-key",
+				"name": "my-name", "_meta": {"redactedAttributes": ["/address"]}}`,
+		},
+		{
+			"attribute private globally along with its own property, attribute listed first",
+			ldcontext.NewBuilder("my-key").Kind("org").
+				Name("my-name").
+				SetValue("address", objectValue).
+				Build(),
+			EventsConfiguration{PrivateAttributes: []ldattr.Ref{
+				ldattr.NewRef("/address"), ldattr.NewRef("/address/city")}},
+			`{"kind": "org", "key": "my-key",
+				"name": "my-name", "_meta": {"redactedAttributes": ["/address"]}}`,
 		},
 		{
 			"nested attribute private per context",

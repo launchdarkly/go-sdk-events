@@ -66,11 +66,12 @@ func makePrivateAttrLookupData(attrRefList []ldattr.Ref) map[string]*privateAttr
 			nextNode := (*parentMap)[name]
 			if nextNode == nil {
 				nextNode = &privateAttrLookupNode{}
-				if i == a.Depth()-1 {
-					aa := a
-					nextNode.attribute = &aa
-				}
 				(*parentMap)[name] = nextNode
+			}
+			if i == a.Depth()-1 && nextNode.attribute == nil {
+				// The node may already exist because a reference to one of its children came first.
+				aa := a
+				nextNode.attribute = &aa
 			}
 			parentMap = &nextNode.children
 		}
