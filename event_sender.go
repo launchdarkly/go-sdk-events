@@ -100,9 +100,14 @@ func (s *defaultEventSender) SendEventData(kind EventDataKind, data []byte, even
 // 2. If delivery fails with a recoverable error, such as an HTTP 503 or an I/O error, retry exactly once after a delay
 // configured by config.RetryDelay. This is done synchronously. If the retry fails, return Success: false.
 //
-// 3. If delivery fails with an unrecoverable error, such as an HTTP 401, return Success: false and MustShutDown: true.
+// 3. If delivery fails with an unexpected error, such as an HTTP 401, return Success: false and Unexpected: true
+// (along with the deprecated equivalent field MustShutDown). How to respond is the caller's decision; the default
+// event processor reacts by entering a temporary delivery cooldown, not by shutting down.
 //
-// 4. If the response has a Date header, parse it into TimeFromServer.
+// 4. If delivery fails with HTTP 413 (payload too large), return Success: false with neither Unexpected nor
+// MustShutDown set, and do not retry: the payload itself can never succeed, but a smaller later payload may.
+//
+// 5. If the response has a Date header, parse it into TimeFromServer.
 //
 // The overridePath parameter only needs to be set if you need to customize the URI path. If it is empty, the standard
 // path of /bulk or /diagnostic will be used as appropriate.
@@ -216,7 +221,11 @@ func SendEventDataWithRetry(
 			// that doesn't mean subsequent payloads won't be small enough to
 			// succeed.
 			tooLarge := resp.StatusCode == http.StatusRequestEntityTooLarge
-			return EventSenderResult{MustShutDown: !tooLarge, StatusCode: resp.StatusCode}
+			return EventSenderResult{
+				Unexpected:   !tooLarge,
+				MustShutDown: !tooLarge, // deprecated equivalent of Unexpected, set for compatibility
+				StatusCode:   resp.StatusCode,
+			}
 		}
 	}
 	// Retries exhausted — return the last status code if we had one

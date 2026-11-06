@@ -111,11 +111,27 @@ type EventSendFailureMetadata struct {
 type EventSenderResult struct {
 	// Success is true if the event payload was delivered.
 	Success bool
-	// MustShutDown is true if the server returned an error indicating that no further event data should be sent.
-	// This normally means that the SDK key is invalid.
+	// Unexpected is true if delivery failed with an unexpected error: one that retrying the same
+	// payload is not expected to fix, such as an HTTP 401 or 403. This normally means that the SDK
+	// key is invalid.
+	Unexpected bool
+	// MustShutDown is true under the same conditions as Unexpected.
+	//
+	// Deprecated: This field is equivalent to Unexpected and is retained for compatibility with
+	// code written before the event processor adopted cooldown behavior. Producers should set
+	// Unexpected, and the senders in this package will keep setting both fields until known
+	// consumers of MustShutDown (such as the Relay Proxy) have migrated to IsUnexpectedFailure.
+	// Consumers should call IsUnexpectedFailure, which accepts either field.
 	MustShutDown bool
 	// TimeFromServer is the last known date/time reported by the server, if available, otherwise zero.
 	TimeFromServer ldtime.UnixMillisecondTime
 	// StatusCode is the HTTP status code from the last response, or 0 if no response was received.
 	StatusCode int
+}
+
+// IsUnexpectedFailure returns true if delivery failed with an unexpected error (see the Unexpected
+// field). It also accepts a result produced by code that predates the Unexpected field and set only
+// the deprecated MustShutDown, so consumers should use this method rather than reading either field.
+func (r EventSenderResult) IsUnexpectedFailure() bool {
+	return r.Unexpected || r.MustShutDown
 }

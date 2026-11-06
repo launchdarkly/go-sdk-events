@@ -3,6 +3,7 @@ package ldevents
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -861,30 +862,6 @@ func TestRawEventIsQueued(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
-func TestShutdownPreventsFurtherEventsFromReachingSender(t *testing.T) {
-	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
-	defer ep.Close()
-
-	es.result = EventSenderResult{MustShutDown: true}
-	firstMessage := json.RawMessage(`{"kind":"raw","arbitrary":["first","attempt"]}`)
-	ep.RecordRawEvent(firstMessage)
-	ep.Flush()
-	ep.waitUntilInactive()
-
-	es.result = EventSenderResult{Success: true}
-	secondMessage := json.RawMessage(`{"kind":"raw","arbitrary":["second", "attempt"]}`)
-	ep.RecordRawEvent(secondMessage)
-	ep.RecordRawEvent(secondMessage)
-	ep.Flush()
-
-	// We have the first event because the sender is a mock that just records
-	// everything sent to it, regardless of its response. However, once we
-	// return a shutdown message, the processor should stop sending new events
-	// to the sender mock.
-	assertEventsReceived(t, es, m.JSONEqual(firstMessage))
-	es.assertNoMoreEvents(t)
-}
-
 func TestPeriodicFlush(t *testing.T) {
 	config := basicConfigWithoutPrivateAttrs()
 	config.FlushInterval = 10 * time.Millisecond
@@ -1004,23 +981,6 @@ func TestNothingIsSentIfThereAreNoEvents(t *testing.T) {
 	es.assertNoMoreEvents(t)
 }
 
-func TestEventProcessorStopsSendingEventsAfterUnrecoverableError(t *testing.T) {
-	ep, es := createEventProcessorAndSender(basicConfigWithoutPrivateAttrs())
-	defer ep.Close()
-
-	es.result = EventSenderResult{MustShutDown: true}
-
-	ie := defaultEventFactory.NewIdentifyEventData(basicContext(), ldvalue.OptionalInt{})
-	ep.RecordIdentifyEvent(ie)
-	ep.Flush()
-	es.awaitEvent(t)
-
-	ep.RecordIdentifyEvent(ie)
-	ep.FlushBlocking(time.Second)
-
-	es.assertNoMoreEvents(t)
-}
-
 func TestDiagnosticInitEventIsSent(t *testing.T) {
 	id := NewDiagnosticID("sdkkey")
 	startTime := time.Now()
@@ -1110,32 +1070,43 @@ func TestDiagnosticPeriodicEventHasEventCounters(t *testing.T) {
 }
 
 type mockEventMetrics struct {
-	droppedCount      int
-	sentCount         int
-	failedSendCount   int
+	lock               sync.Mutex
+	droppedCount       int
+	sentCount          int
+	failedSendCount    int
 	lastFailedSendMeta EventSendFailureMetadata
-	bytesSent         int
-	lastPendingEvents int
+	bytesSent          int
+	lastPendingEvents  int
 }
 
 func (m *mockEventMetrics) RecordDroppedEvents(count int) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.droppedCount += count
 }
 
 func (m *mockEventMetrics) RecordEventsSent(count int) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.sentCount += count
 }
 
 func (m *mockEventMetrics) RecordEventsFailedSend(count int, metadata EventSendFailureMetadata) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.failedSendCount += count
 	m.lastFailedSendMeta = metadata
 }
 
 func (m *mockEventMetrics) RecordEventsBytesSent(bytes int) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.bytesSent += bytes
 }
 
 func (m *mockEventMetrics) RecordPendingEvents(depth int) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.lastPendingEvents = depth
 }
 
@@ -1293,9 +1264,7 @@ func TestEventMetricsRecordsEventsFailedSend(t *testing.T) {
 	defer ep.Close()
 
 	// Configure the mock sender to return failure
-	es.lock.Lock()
-	es.result = EventSenderResult{Success: false}
-	es.lock.Unlock()
+	es.setResult(EventSenderResult{Success: false})
 
 	ep.RecordRawEvent(json.RawMessage(`{"kind":"custom","key":"e1"}`))
 	ep.RecordRawEvent(json.RawMessage(`{"kind":"custom","key":"e2"}`))
