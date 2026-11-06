@@ -7,8 +7,9 @@ import (
 // These constants bind the RETRY spec's extended regime to the event processor. A healthy
 // operation is a successful (2xx) analytics payload delivery. The windows are not floored at the
 // flush interval: unlike a polling data source, whose retry delay is its scheduler, the processor
-// attempts delivery only on its unchanged flush schedule, so a window shorter than the flush
-// interval cannot make it try faster while failing than while healthy.
+// attempts delivery only when a scheduled or manual flush occurs, and in-window flushes of either
+// kind make no attempt, so a window shorter than the flush interval cannot make the processor try
+// faster while failing than while healthy.
 const (
 	cooldownInitialDelay   = 5 * time.Minute
 	cooldownMaxDelay       = time.Hour

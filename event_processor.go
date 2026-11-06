@@ -215,13 +215,13 @@ func (ed *eventDispatcher) runMainLoop(
 		ed.config.Loggers.Errorf("Unexpected panic in event processing thread: %+v", err)
 	}
 
-	userKeysFlushInterval := ed.config.UserKeysFlushInterval
-	if userKeysFlushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
-		userKeysFlushInterval = DefaultUserKeysFlushInterval
-	}
 	flushInterval := ed.config.FlushInterval
 	if flushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
 		flushInterval = DefaultFlushInterval
+	}
+	userKeysFlushInterval := ed.config.UserKeysFlushInterval
+	if userKeysFlushInterval <= 0 { // COVERAGE: no way to test this logic in unit tests
+		userKeysFlushInterval = DefaultUserKeysFlushInterval
 	}
 	flushTicker := time.NewTicker(flushInterval)
 	usersResetTicker := time.NewTicker(userKeysFlushInterval)
@@ -320,11 +320,6 @@ func (ed *eventDispatcher) handleSenderResult(sr senderResult) {
 		ed.lastKnownPastTime = result.TimeFromServer
 	}
 	switch {
-	case result.Success:
-		if resumed := ed.cooldown.recordSuccess(sr.token); resumed {
-			ed.warnedDiscardThisWindow = false
-			ed.config.Loggers.Info("Event delivery resumed after cooldown")
-		}
 	case result.IsUnexpectedFailure():
 		if window, opened := ed.cooldown.recordUnexpectedFailure(sr.token); opened {
 			ed.warnedDiscardThisWindow = false
@@ -332,6 +327,10 @@ func (ed *eventDispatcher) handleSenderResult(sr senderResult) {
 				"Event delivery failed with an unexpected error (HTTP status %d);"+
 					" event delivery will not be attempted for the next %s",
 				result.StatusCode, window.Round(time.Second))
+		}
+	case result.Success:
+		if resumed := ed.cooldown.recordSuccess(sr.token); resumed {
+			ed.config.Loggers.Info("Event delivery resumed after cooldown")
 		}
 	default:
 		ed.cooldown.recordFailure(sr.token)
@@ -471,12 +470,12 @@ func (ed *eventDispatcher) triggerFlush(completed chan struct{}) {
 	if ed.outbox.summarizer.snapshot().hasCounters() {
 		totalEventCount++
 	}
-	if totalEventCount == 0 {
-		ed.eventsInLastBatch = 0
-		return
-	}
 	if ed.cooldown.inCooldown() {
 		ed.discardPayloadInCooldown(completed, totalEventCount)
+		return
+	}
+	if totalEventCount == 0 {
+		ed.eventsInLastBatch = 0
 		return
 	}
 	payload := ed.outbox.getPayload(completed)
@@ -502,6 +501,9 @@ func (ed *eventDispatcher) discardPayloadInCooldown(completed chan struct{}, tot
 	}
 	// No batch reached the service, so the diagnostic batch-size stat must not report one.
 	ed.eventsInLastBatch = 0
+	if totalEventCount == 0 {
+		return
+	}
 	hadContextIntroductions := false
 	for _, e := range ed.outbox.events {
 		switch e.(type) {

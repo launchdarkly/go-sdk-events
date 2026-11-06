@@ -155,11 +155,10 @@ func TestCooldownTrackerRemaining(t *testing.T) {
 }
 
 // configWithCooldownClock returns the standard test configuration instrumented so that cooldown
-// windows can be crossed by advancing a fake clock. The flush interval only needs to be long
-// enough in real time that the flush ticker never fires within a test.
+// windows can be crossed by advancing a fake clock. The inherited 1-hour flush interval keeps the
+// real-time flush ticker from ever firing within a test.
 func configWithCooldownClock() (EventsConfiguration, *fakeCooldownClock) {
 	config := basicConfigWithoutPrivateAttrs()
-	config.FlushInterval = time.Minute
 	clock := newFakeCooldownClock()
 	config.timeNowFn = clock.nowFn
 	return config, clock
@@ -615,4 +614,320 @@ func TestSummaryOnlyInWindowDiscardKeepsAlreadyIntroducedContexts(t *testing.T) 
 	ep.RecordEvaluation(fe)
 	ep.Flush()
 	assertEventsReceived(t, es, anySummaryEvent())
+}
+
+func TestInWindowFlushWithEmptyOutboxCompletesPromptlyWithoutDiscard(t *testing.T) {
+	config, _ := configWithCooldownClock()
+	mockLog := ldlogtest.NewMockLog()
+	mockLog.Loggers.SetMinLevel(ldlog.Debug)
+	config.Loggers = mockLog.Loggers
+	metrics := &mockEventMetrics{}
+	config.EventMetrics = metrics
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	enterCooldown(t, ep, es, unexpectedResult())
+	failedAfterOpen := metrics.failedSendCount
+
+	// Nothing is buffered, so there is no batch to dispose of: no failed-send metric and no
+	// discard log. The flush must still complete immediately; a timeout of zero or less means
+	// wait indefinitely, so this call returns only if the completion channel is closed promptly.
+	returned := make(chan bool, 1)
+	go func() { returned <- ep.FlushBlocking(0) }()
+	select {
+	case r := <-returned:
+		assert.True(t, r)
+	case <-time.After(time.Second):
+		assert.Fail(t, "FlushBlocking(0) did not complete for an empty in-window flush")
+	}
+
+	ep.waitUntilInactive()
+	assert.Equal(t, failedAfterOpen, metrics.failedSendCount)
+	for _, level := range []ldlog.LogLevel{ldlog.Warn, ldlog.Debug} {
+		for _, line := range mockLog.GetOutput(level) {
+			assert.NotContains(t, line, "Discarded")
+		}
+	}
+}
+
+func TestUnexpectedFailureResultDoesNotCalibrateServerTime(t *testing.T) {
+	clock := newFakeCooldownClock()
+	ed := newDispatcherForResultTests(clock)
+
+	// The server time on an unexpected-failure result is not trusted for debug-event cutoff
+	// calibration, even though the same field on a stale or recoverable result is.
+	serverTime := ldtime.UnixMillisecondTime(777777)
+	ed.handleSenderResult(senderResult{
+		result: EventSenderResult{Unexpected: true, StatusCode: 401, TimeFromServer: serverTime},
+		token:  ed.cooldown.beginDelivery(),
+	})
+	assert.Equal(t, ldtime.UnixMillisecondTime(0), ed.lastKnownPastTime)
+}
+
+func TestZeroTokenIsNeverCurrent(t *testing.T) {
+	clock := newFakeCooldownClock()
+	tracker := newTrackerForTest(clock)
+
+	// An unstamped payload (the zero windowToken) must never pass for a live delivery, whether or
+	// not a window has ever existed.
+	assert.False(t, tracker.isCurrent(windowToken{}))
+	_, opened := tracker.recordUnexpectedFailure(tracker.beginDelivery())
+	require.True(t, opened)
+	clock.advance(cooldownInitialDelay + time.Second)
+	assert.False(t, tracker.isCurrent(windowToken{}))
+
+	before := tracker.consecutiveSuccesses
+	assert.False(t, tracker.recordSuccess(windowToken{}))
+	assert.Equal(t, before, tracker.consecutiveSuccesses)
+}
+
+func TestStaleOrdinaryFailureCannotCancelTheNextWindow(t *testing.T) {
+	clock := newFakeCooldownClock()
+	ed := newDispatcherForResultTests(clock)
+
+	// A delivery is in flight when a concurrent delivery's failure opens the window.
+	inFlight := ed.cooldown.beginDelivery()
+	ed.handleSenderResult(senderResult{result: unexpectedResult(), token: inFlight})
+	require.True(t, ed.cooldown.inCooldown())
+
+	// The window elapses and a probe is dispatched; then the straggler's recoverable failure
+	// lands. It is stale: were it allowed to end the already-elapsed window, it would close the
+	// boundary round and stale the probe, so the probe's failure would open no window at all.
+	clock.advance(cooldownInitialDelay + time.Second)
+	probe := ed.cooldown.beginDelivery()
+	ed.handleSenderResult(senderResult{
+		result: EventSenderResult{Success: false, StatusCode: 503},
+		token:  inFlight,
+	})
+
+	ed.handleSenderResult(senderResult{result: unexpectedResult(), token: probe})
+	assert.True(t, ed.cooldown.inCooldown())
+	assert.Equal(t, 10*time.Minute, ed.cooldown.remaining())
+}
+
+func TestStaleOrdinaryFailureDoesNotBreakSuccessStreak(t *testing.T) {
+	clock := newFakeCooldownClock()
+	tracker := newTrackerForTest(clock)
+
+	failPastWindow(t, tracker, clock)
+	require.True(t, tracker.recordSuccess(tracker.beginDelivery())) // the probe ends the window
+	staleToken := windowToken{generation: 1}                        // issued before any window existed
+	tracker.recordFailure(staleToken)
+	tracker.recordSuccess(tracker.beginDelivery()) // second consecutive success resets the ladder
+
+	window, opened := tracker.recordUnexpectedFailure(tracker.beginDelivery())
+	require.True(t, opened)
+	assert.Equal(t, cooldownInitialDelay, window)
+}
+
+func TestDefaultClockOpensWindow(t *testing.T) {
+	// Production passes no clock; the default real-time clock path must work end to end.
+	tracker := newDeliveryCooldownTracker(nil)
+	window, opened := tracker.recordUnexpectedFailure(tracker.beginDelivery())
+	require.True(t, opened)
+	assert.Equal(t, cooldownInitialDelay, window)
+	assert.True(t, tracker.inCooldown())
+	assert.Greater(t, tracker.remaining(), cooldownInitialDelay-time.Minute)
+}
+
+func TestWindowBoundaryInstantIsOutsideCooldown(t *testing.T) {
+	clock := newFakeCooldownClock()
+	tracker := newTrackerForTest(clock)
+
+	window, opened := tracker.recordUnexpectedFailure(tracker.beginDelivery())
+	require.True(t, opened)
+	clock.advance(window)
+	assert.False(t, tracker.inCooldown())
+	assert.Equal(t, time.Duration(0), tracker.remaining())
+}
+
+func TestResultClaimingBothSuccessAndUnexpectedFailureOpensWindow(t *testing.T) {
+	// Only a custom EventSender can produce a result that claims success and an unexpected
+	// failure at once; the failure takes precedence, so delivery health is never assumed from a
+	// contradictory result.
+	config, _ := configWithCooldownClock()
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	enterCooldown(t, ep, es, EventSenderResult{Success: true, MustShutDown: true, StatusCode: 401})
+
+	ep.RecordRawEvent(json.RawMessage(`{"kind":"raw","arbitrary":["in-window"]}`))
+	require.True(t, ep.FlushBlocking(time.Second))
+	es.assertNoMoreEvents(t)
+}
+
+func TestWindowShorterThanFlushIntervalResumesWithoutInWindowFlush(t *testing.T) {
+	// With a flush interval longer than the window, no flush of any kind lands inside the window,
+	// so nothing in the dispatcher may depend on an in-window tick: the window must be exactly
+	// the ladder rung rather than stretched to the flush cadence, and the first post-window flush
+	// must deliver.
+	config, clock := configWithCooldownClock()
+	require.Equal(t, time.Hour, config.FlushInterval)
+	metrics := &mockEventMetrics{}
+	config.EventMetrics = metrics
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	flag := FlagEventProperties{Key: "flagkey", Version: 11}
+	fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason,
+		false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	ep.RecordEvaluation(fe)
+	ep.Flush()
+	assertEventsReceived(t, es, anyIndexEvent(), anySummaryEvent())
+
+	enterCooldown(t, ep, es, unexpectedResult())
+	ep.waitUntilInactive()
+	failedAfterOpen := metrics.failedSendCount
+
+	clock.advance(cooldownInitialDelay - time.Second)
+	assert.Equal(t, failedAfterOpen, metrics.failedSendCount) // nothing was discarded in-window
+
+	// Just past the rung, the next flush delivers. No discard destroyed a context introduction,
+	// so the payload carries no redundant index event.
+	clock.advance(2 * time.Second)
+	ep.RecordEvaluation(fe)
+	ep.Flush()
+	assertEventsReceived(t, es, anySummaryEvent())
+	es.assertNoMoreEvents(t)
+
+	ep.waitUntilInactive()
+	ep.waitUntilInactive()
+	assert.Equal(t, failedAfterOpen, metrics.failedSendCount)
+}
+
+func TestWarnLevelDiscardReturnsAfterRecoverablyEndedWindow(t *testing.T) {
+	config, clock := configWithCooldownClock()
+	mockLog := ldlogtest.NewMockLog()
+	mockLog.Loggers.SetMinLevel(ldlog.Debug)
+	config.Loggers = mockLog.Loggers
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	countWarns := func() int {
+		n := 0
+		for _, line := range mockLog.GetOutput(ldlog.Warn) {
+			if strings.Contains(line, "Discarded") {
+				n++
+			}
+		}
+		return n
+	}
+
+	enterCooldown(t, ep, es, unexpectedResult())
+	ep.RecordRawEvent(json.RawMessage(`{"kind":"raw","arbitrary":["w1"]}`))
+	require.True(t, ep.FlushBlocking(time.Second))
+	require.Equal(t, 1, countWarns())
+
+	// The window elapses and the probe fails recoverably, which ends the window without opening
+	// a new one. The next window is a new incident and must get its own Warn-level discard.
+	clock.advance(cooldownInitialDelay + time.Second)
+	es.setResult(EventSenderResult{Success: false, StatusCode: 503})
+	ep.RecordRawEvent(json.RawMessage(`{"kind":"raw","arbitrary":["probe"]}`))
+	ep.Flush()
+	es.awaitEvent(t)
+	ep.waitUntilInactive()
+	ep.waitUntilInactive()
+
+	enterCooldown(t, ep, es, unexpectedResult())
+	ep.RecordRawEvent(json.RawMessage(`{"kind":"raw","arbitrary":["w2"]}`))
+	require.True(t, ep.FlushBlocking(time.Second))
+	assert.Equal(t, 2, countWarns())
+}
+
+func TestDiscardCountMatchesDeliveredBatchCount(t *testing.T) {
+	// The in-window discard reports a count computed from the outbox, while a delivered-and-failed
+	// batch reports the count computed from the payload during serialization. The two must agree
+	// for every shape of batch, so RecordEventsFailedSend reports the same number whether a batch
+	// was refused by the service or discarded in-window.
+	flag := FlagEventProperties{Key: "flagkey", Version: 11}
+	evalData := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason,
+		false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	identify := defaultEventFactory.NewIdentifyEventData(basicContext(), ldvalue.OptionalInt{})
+	index := indexEvent{BaseEvent{CreationDate: 1000, Context: basicContext()}}
+	raw := rawEvent{data: json.RawMessage(`{"kind":"custom","key":"e"}`)}
+	custom := defaultEventFactory.NewCustomEventData("ck", basicContext(), ldvalue.Null(), false, 0, ldvalue.OptionalInt{})
+
+	cases := []struct {
+		name    string
+		events  []anyEventInput
+		summary []EvaluationData
+	}{
+		{name: "empty"},
+		{name: "summary only", summary: []EvaluationData{evalData}},
+		{name: "events only", events: []anyEventInput{raw, custom}},
+		{name: "index + identify + summary", events: []anyEventInput{index, identify}, summary: []EvaluationData{evalData}},
+		{name: "many events + summary", events: []anyEventInput{raw, raw, index, identify, custom, evalData}, summary: []EvaluationData{evalData, evalData}},
+		{name: "debug event + summary", events: []anyEventInput{evalData}, summary: []EvaluationData{evalData}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			outbox := newEventsOutbox(100, ldlog.NewDisabledLoggers(), NoOpEventMetrics{})
+			for _, e := range c.events {
+				outbox.addEvent(e)
+			}
+			for _, s := range c.summary {
+				outbox.addToSummary(s)
+			}
+
+			discardCount := len(outbox.events)
+			if outbox.summarizer.snapshot().hasCounters() {
+				discardCount++
+			}
+
+			formatter := &eventOutputFormatter{
+				contextFormatter: newEventContextFormatter(basicConfigWithoutPrivateAttrs()),
+				config:           basicConfigWithoutPrivateAttrs(),
+			}
+			payload := outbox.getPayload(nil)
+			bytes, deliveredCount := formatter.makeOutputEvents(payload.events, payload.summary)
+
+			assert.Equal(t, deliveredCount, discardCount)
+			if discardCount > 0 {
+				assert.NotEmpty(t, bytes)
+			}
+		})
+	}
+}
+
+func TestFlushQueuedBehindWindowOpeningResultIsDiscarded(t *testing.T) {
+	// A flush request that is already queued when a window-opening delivery result is pending
+	// must be processed in-window and discarded: the dispatcher consumes pending delivery results
+	// before any queued message, so cooldown state is current by the time the flush is handled.
+	//
+	// The gated sender holds the failing delivery in flight while a flush is queued behind a sync
+	// message; the main loop blocks on the sync until the held delivery finishes, and the worker
+	// publishes its result before it is counted done, so when the main loop moves on, the failure
+	// result and the queued flush are both pending. An unprioritized select would dispatch the
+	// queued flush about half the time, so the iterations make a regression overwhelmingly likely
+	// to surface.
+	for i := 0; i < 12; i++ {
+		func() {
+			config, _ := configWithCooldownClock()
+			ep, es := createEventProcessorAndSender(config)
+			defer ep.Close()
+
+			gateCh := make(chan struct{})
+			waitingCh := make(chan struct{}, 2)
+			es.setGate(gateCh, waitingCh)
+			es.setResult(unexpectedResult())
+
+			ep.RecordRawEvent(json.RawMessage(`{"kind":"raw","arbitrary":["opener"]}`))
+			ep.Flush()
+			<-waitingCh      // the delivery is now held in flight inside the sender
+			es.awaitEvent(t) // consume the opener so assertNoMoreEvents below is meaningful
+
+			ep.RecordRawEvent(json.RawMessage(`{"kind":"raw","arbitrary":["queued"]}`))
+			sync := syncEventsMessage{replyCh: make(chan struct{})}
+			ep.inboxCh <- sync // queued directly so the flush is ordered strictly after it
+			ep.Flush()
+			close(gateCh) // release the held delivery; its failure opens the window
+			<-sync.replyCh
+			ep.waitUntilInactive() // the queued flush has now been processed
+
+			assert.Equal(t, 1, es.getPayloadCount(),
+				"the queued flush must have been discarded in-window, not dispatched")
+			es.assertNoMoreEvents(t)
+		}()
+	}
 }
