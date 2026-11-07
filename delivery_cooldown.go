@@ -7,9 +7,9 @@ import (
 // These constants bind the RETRY spec's extended regime to the event processor. A healthy
 // operation is a successful (2xx) analytics payload delivery. The windows are not floored at the
 // flush interval: unlike a polling data source, whose retry delay is its scheduler, the processor
-// attempts delivery only when a scheduled or manual flush occurs, and in-window flushes of either
-// kind make no attempt, so a window shorter than the flush interval cannot make the processor try
-// faster while failing than while healthy.
+// attempts delivery only when a flush occurs (scheduled, manual, or at shutdown), and in-window
+// flushes of any kind make no attempt, so a window shorter than the flush interval cannot make the
+// processor try faster while failing than while healthy.
 const (
 	cooldownInitialDelay   = 5 * time.Minute
 	cooldownMaxDelay       = time.Hour
@@ -95,9 +95,11 @@ func (c *deliveryCooldownTracker) recordSuccess(token windowToken) (resumed bool
 		c.windowEnd = time.Time{}
 		resumed = true
 		// The probe ends the window-boundary round: the tokens of its concurrently dispatched
-		// siblings go stale, so "consecutive" successes are cadence-separated rounds, not parallel
-		// deliveries of one round. (A sibling unexpected failure goes stale with them; the next
-		// failed delivery of the new round opens the window instead, at most a cadence later.)
+		// siblings go stale, so the boundary round cannot combine parallel deliveries into a
+		// reset. (A sibling unexpected failure goes stale with them; the next failed delivery of
+		// the new round opens the window instead, at most a cadence later.) Later rounds leave the
+		// epoch unchanged, so parallel deliveries of one such round each count toward the streak:
+		// the reset threshold counts successful deliveries, not rounds.
 		c.epoch++
 	}
 	c.consecutiveSuccesses++

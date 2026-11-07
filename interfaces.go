@@ -111,9 +111,11 @@ type EventSendFailureMetadata struct {
 type EventSenderResult struct {
 	// Success is true if the event payload was delivered.
 	Success bool
-	// Unexpected is true if delivery failed with an unexpected error: one that retrying the same
-	// payload is not expected to fix, such as an HTTP 401 or 403. This normally means that the SDK
-	// key is invalid.
+	// Unexpected is true if delivery failed with an unexpected error: one that indicates the
+	// service is refusing requests from this SDK configuration regardless of payload, such as an
+	// HTTP 401 or 403. This normally means that the SDK key is invalid. An HTTP 413 is not
+	// unexpected, even though the same payload would never succeed on a retry: it rejects only
+	// the oversized payload, and a smaller one may be accepted.
 	Unexpected bool
 	// MustShutDown is true under the same conditions as Unexpected.
 	//
