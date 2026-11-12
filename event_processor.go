@@ -323,6 +323,9 @@ func (ed *eventDispatcher) handleSenderResult(sr senderResult) {
 	case result.IsUnexpectedFailure():
 		if window, opened := ed.cooldown.recordUnexpectedFailure(sr.token); opened {
 			ed.warnedDiscardThisWindow = false
+			// when cooldown window opens, ny index or identify events in the refused batch were
+			// lost with it: forget all context keys so later payloads carry the full contexts again.
+			ed.userKeys.clear()
 			ed.config.Loggers.Errorf(
 				"Event delivery failed with an unexpected error (HTTP status %d);"+
 					" event delivery will not be attempted for the next %s",

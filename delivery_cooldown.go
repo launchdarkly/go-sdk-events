@@ -90,8 +90,15 @@ func (c *deliveryCooldownTracker) recordSuccess(token windowToken) (resumed bool
 }
 
 // recordFailure records a delivery failure that was not unexpected. It breaks the
-// consecutive-success streak but never opens or lengthens a window.
+// consecutive-success streak, even on a stale token, but never opens or lengthens a window.
 func (c *deliveryCooldownTracker) recordFailure(token windowToken) {
+	if token == (windowToken{}) {
+		return // unstamped: not the outcome of a real delivery
+	}
+	// A real failure breaks the streak regardless of its era: the reset threshold counts
+	// consecutive successful deliveries, and a failure between two successes makes them
+	// non-consecutive no matter which round dispatched it.
+	c.consecutiveSuccesses = 0
 	if !c.isCurrent(token) {
 		return
 	}
@@ -104,19 +111,23 @@ func (c *deliveryCooldownTracker) recordFailure(token windowToken) {
 		c.windowEnd = time.Time{}
 		c.epoch++
 	}
-	c.consecutiveSuccesses = 0
 }
 
 // recordUnexpectedFailure records a delivery failure classified as unexpected, opening a cooldown
+// window. A stale token still breaks the consecutive-success streak but never opens or steps a
 // window.
 func (c *deliveryCooldownTracker) recordUnexpectedFailure(token windowToken) (time.Duration, bool) {
+	if token == (windowToken{}) {
+		return 0, false // unstamped: not the outcome of a real delivery
+	}
+	// See recordFailure: a real failure breaks the streak regardless of its era.
+	c.consecutiveSuccesses = 0
 	if !c.isCurrent(token) {
 		return 0, false
 	}
 	if c.inCooldown() { // COVERAGE: defensive; a current token cannot originate inside a window
 		return 0, false
 	}
-	c.consecutiveSuccesses = 0
 	c.attempts++
 	c.epoch++
 	window := cooldownMaxDelay

@@ -337,6 +337,7 @@ func newDispatcherForResultTests(clock *fakeCooldownClock) *eventDispatcher {
 	return &eventDispatcher{
 		config:   config,
 		cooldown: newDeliveryCooldownTracker(clock.nowFn),
+		userKeys: newLruCache(100),
 	}
 }
 
@@ -457,8 +458,8 @@ func TestBoundaryRoundSiblingsAreStaleAfterProbeSuccess(t *testing.T) {
 	ed.handleSenderResult(senderResult{result: unexpectedResult(), token: boundaryToken})
 	require.False(t, ed.cooldown.inCooldown())
 
-	// The retry state was not reset (one credited success, not two), so the next failed delivery
-	// opens a doubled window.
+	// The retry state was not reset (the sibling failure also broke the streak), so the next
+	// failed delivery opens a doubled window.
 	ed.handleSenderResult(senderResult{result: unexpectedResult(), token: ed.cooldown.beginDelivery()})
 	assert.Equal(t, 10*time.Minute, ed.cooldown.remaining())
 }
@@ -589,7 +590,7 @@ func TestIdentifyOnlyInWindowDiscardForgetsTheContext(t *testing.T) {
 	assertEventsReceived(t, es, anyIndexEvent(), anySummaryEvent())
 }
 
-func TestSummaryOnlyInWindowDiscardKeepsAlreadyIntroducedContexts(t *testing.T) {
+func TestWindowOpenForgetsEvenDeliveredIntroductions(t *testing.T) {
 	config, clock := configWithCooldownClock()
 	ep, es := createEventProcessorAndSender(config)
 	defer ep.Close()
@@ -602,18 +603,45 @@ func TestSummaryOnlyInWindowDiscardKeepsAlreadyIntroducedContexts(t *testing.T) 
 	ep.Flush()
 	assertEventsReceived(t, es, anyIndexEvent(), anySummaryEvent())
 
-	// A summary-only batch discarded in-window destroys no context introduction, so the dedup
-	// cache must be left intact.
+	// Opening a window forgets every context key, including ones whose index events were
+	// delivered: the dispatcher cannot see which contexts the refused batch carried, and a
+	// redundant index event after the window is harmless.
 	enterCooldown(t, ep, es, unexpectedResult())
 	ep.RecordEvaluation(fe)
 	require.True(t, ep.FlushBlocking(time.Second))
 	es.assertNoMoreEvents(t)
 
-	// The post-window payload therefore carries no redundant index event.
 	clock.advance(cooldownInitialDelay + time.Second)
 	ep.RecordEvaluation(fe)
 	ep.Flush()
-	assertEventsReceived(t, es, anySummaryEvent())
+	assertEventsReceived(t, es, anyIndexEvent(), anySummaryEvent())
+}
+
+func TestRefusedWindowOpeningBatchForgetsItsContexts(t *testing.T) {
+	config, clock := configWithCooldownClock()
+	ep, es := createEventProcessorAndSender(config)
+	defer ep.Close()
+
+	// The window-opening batch itself introduces a context via an identify event, and is
+	// refused: the full context never reached the service.
+	es.setResult(unexpectedResult())
+	ep.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext(), ldvalue.OptionalInt{}))
+	ep.Flush()
+	es.awaitEvent(t)
+	ep.waitUntilInactive()
+	ep.waitUntilInactive()
+	es.setResult(EventSenderResult{Success: true})
+
+	// With no in-window flush at all, the post-window payload must still introduce the context
+	// afresh rather than referencing one the service never received.
+	clock.advance(cooldownInitialDelay + time.Second)
+	flag := FlagEventProperties{Key: "flagkey", Version: 11}
+	fe := defaultEventFactory.NewEvaluationData(flag, basicContext(), testEvalDetailWithoutReason,
+		false, ldvalue.Null(), "", ldvalue.OptionalInt{}, false)
+	ep.RecordEvaluation(fe)
+	ep.Flush()
+	assertEventsReceived(t, es, anyIndexEvent(), anySummaryEvent())
+	es.assertNoMoreEvents(t)
 }
 
 func TestInWindowFlushWithEmptyOutboxCompletesPromptlyWithoutDiscard(t *testing.T) {
@@ -679,6 +707,13 @@ func TestZeroTokenIsNeverCurrent(t *testing.T) {
 	before := tracker.consecutiveSuccesses
 	assert.False(t, tracker.recordSuccess(windowToken{}))
 	assert.Equal(t, before, tracker.consecutiveSuccesses)
+
+	// Unstamped failures are not real delivery outcomes and must not break the streak either.
+	require.True(t, tracker.recordSuccess(tracker.beginDelivery())) // the probe; streak is 1
+	tracker.recordFailure(windowToken{})
+	_, opened = tracker.recordUnexpectedFailure(windowToken{})
+	require.False(t, opened)
+	assert.Equal(t, 1, tracker.consecutiveSuccesses)
 }
 
 func TestStaleOrdinaryFailureCannotCancelTheNextWindow(t *testing.T) {
@@ -705,19 +740,43 @@ func TestStaleOrdinaryFailureCannotCancelTheNextWindow(t *testing.T) {
 	assert.Equal(t, 10*time.Minute, ed.cooldown.remaining())
 }
 
-func TestStaleOrdinaryFailureDoesNotBreakSuccessStreak(t *testing.T) {
+func TestStaleFailureBetweenSuccessesPreventsLadderReset(t *testing.T) {
+	clock := newFakeCooldownClock()
+	tracker := newTrackerForTest(clock)
+
+	// The probe and a sibling are dispatched together in the boundary round; the probe succeeds,
+	// staling the sibling, and then the sibling's real failure lands.
+	failPastWindow(t, tracker, clock) // one failed probe on the ladder
+	boundaryToken := tracker.beginDelivery()
+	require.True(t, tracker.recordSuccess(boundaryToken))
+	tracker.recordFailure(boundaryToken)
+	tracker.recordSuccess(tracker.beginDelivery())
+
+	// Success, failure, success: the successes were not consecutive, so the ladder did not reset
+	// and the next failed probe opens the doubled window.
+	window, opened := tracker.recordUnexpectedFailure(tracker.beginDelivery())
+	require.True(t, opened)
+	assert.Equal(t, 10*time.Minute, window)
+}
+
+func TestStaleUnexpectedFailureBetweenSuccessesPreventsLadderReset(t *testing.T) {
 	clock := newFakeCooldownClock()
 	tracker := newTrackerForTest(clock)
 
 	failPastWindow(t, tracker, clock)
-	require.True(t, tracker.recordSuccess(tracker.beginDelivery())) // the probe ends the window
-	staleToken := windowToken{generation: 1}                        // issued before any window existed
-	tracker.recordFailure(staleToken)
-	tracker.recordSuccess(tracker.beginDelivery()) // second consecutive success resets the ladder
+	boundaryToken := tracker.beginDelivery()
+	require.True(t, tracker.recordSuccess(boundaryToken))
 
-	window, opened := tracker.recordUnexpectedFailure(tracker.beginDelivery())
+	// The stale sibling's unexpected failure breaks the streak but neither opens nor steps.
+	window, opened := tracker.recordUnexpectedFailure(boundaryToken)
+	require.False(t, opened)
+	require.Equal(t, time.Duration(0), window)
+	require.False(t, tracker.inCooldown())
+	tracker.recordSuccess(tracker.beginDelivery())
+
+	window, opened = tracker.recordUnexpectedFailure(tracker.beginDelivery())
 	require.True(t, opened)
-	assert.Equal(t, cooldownInitialDelay, window)
+	assert.Equal(t, 10*time.Minute, window)
 }
 
 func TestDefaultClockOpensWindow(t *testing.T) {
@@ -782,12 +841,12 @@ func TestWindowShorterThanFlushIntervalResumesWithoutInWindowFlush(t *testing.T)
 	clock.advance(cooldownInitialDelay - time.Second)
 	assert.Equal(t, failedAfterOpen, metrics.failedSendCount) // nothing was discarded in-window
 
-	// Just past the rung, the next flush delivers. No discard destroyed a context introduction,
-	// so the payload carries no redundant index event.
+	// Just past the rung, the next flush delivers. The window-open wipe forgot the context, so
+	// the payload introduces it again.
 	clock.advance(2 * time.Second)
 	ep.RecordEvaluation(fe)
 	ep.Flush()
-	assertEventsReceived(t, es, anySummaryEvent())
+	assertEventsReceived(t, es, anyIndexEvent(), anySummaryEvent())
 	es.assertNoMoreEvents(t)
 
 	ep.waitUntilInactive()
