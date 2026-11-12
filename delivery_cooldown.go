@@ -4,36 +4,23 @@ import (
 	"time"
 )
 
-// These constants bind the RETRY spec's extended regime to the event processor. A healthy
-// operation is a successful (2xx) analytics payload delivery. The windows are not floored at the
-// flush interval: unlike a polling data source, whose retry delay is its scheduler, the processor
-// attempts delivery only when a flush occurs (scheduled, manual, or at shutdown), and in-window
-// flushes of any kind make no attempt, so a window shorter than the flush interval cannot make the
-// processor try faster while failing than while healthy.
+// The extended-regime ladder. Windows are deliberately not floored at the flush interval.
 const (
 	cooldownInitialDelay   = 5 * time.Minute
 	cooldownMaxDelay       = time.Hour
 	cooldownResetThreshold = 2
 )
 
-// windowToken identifies the span between cooldown-window boundaries in which a delivery was
-// dispatched; a token stops being current when a window opens or ends. The dispatcher obtains one
-// from beginDelivery when it hands a payload off for delivery and presents it with the delivery's
-// outcome; the tracker ignores outcomes whose token is no longer current. The zero value is never
-// current, so an unstamped payload cannot pass for a live delivery.
+// windowToken identifies the span between window boundaries in which a delivery was dispatched.
+// The zero value is never current, so an unstamped payload cannot pass for a live delivery.
 type windowToken struct {
 	generation int
 }
 
 // deliveryCooldownTracker decides when analytics event delivery is in a cooldown window after an
 // unexpected failure, so that a condition such as an invalid SDK key backs delivery off instead
-// of permanently disabling it.
-//
-// Every delivery outcome is reported together with the windowToken issued when that delivery
-// was dispatched. A token stops being current when a window opens or ends, so an outcome from a
-// delivery that was already in flight across that boundary updates nothing. This is what confines
-// ladder movement and the success streak to actual probes even with concurrent deliveries
-// straddling a window boundary.
+// of permanently disabling it. Outcomes with a stale windowToken update nothing, which confines
+// ladder movement and the success streak to actual probes under concurrent deliveries.
 //
 // The tracker is pure state: it starts no timers and does no I/O or logging. It is not safe for
 // concurrent use; the dispatcher accesses it only from its main goroutine.
@@ -80,10 +67,8 @@ func (c *deliveryCooldownTracker) remaining() time.Duration {
 }
 
 // recordSuccess records a successful delivery. The retry state resets only after
-// cooldownResetThreshold consecutive successes. It returns true when this success is the probe
-// that ended a window (the first success after the window elapsed), so the caller can log the
-// resumption. Stale outcomes update nothing; the in-cooldown branch is defensive, since a
-// current-era delivery cannot have been dispatched while a window was open.
+// cooldownResetThreshold consecutive successes. It returns true when this success is the first probe
+// after a window ended.
 func (c *deliveryCooldownTracker) recordSuccess(token windowToken) (resumed bool) {
 	if !c.isCurrent(token) {
 		return false
@@ -94,12 +79,7 @@ func (c *deliveryCooldownTracker) recordSuccess(token windowToken) (resumed bool
 	if !c.windowEnd.IsZero() {
 		c.windowEnd = time.Time{}
 		resumed = true
-		// The probe ends the window-boundary round: the tokens of its concurrently dispatched
-		// siblings go stale, so the boundary round cannot combine parallel deliveries into a
-		// reset. (A sibling unexpected failure goes stale with them; the next failed delivery of
-		// the new round opens the window instead, at most a cadence later.) Later rounds leave the
-		// epoch unchanged, so parallel deliveries of one such round each count toward the streak:
-		// the reset threshold counts successful deliveries, not rounds.
+		// The probe ends the window: the tokens previously given out go stale
 		c.epoch++
 	}
 	c.consecutiveSuccesses++
@@ -110,9 +90,7 @@ func (c *deliveryCooldownTracker) recordSuccess(token windowToken) (resumed bool
 }
 
 // recordFailure records a delivery failure that was not unexpected. It breaks the
-// consecutive-success streak but never opens or lengthens a window. Stale outcomes update
-// nothing; the in-cooldown branch is defensive, since a current-era delivery cannot have been
-// dispatched while a window was open.
+// consecutive-success streak but never opens or lengthens a window.
 func (c *deliveryCooldownTracker) recordFailure(token windowToken) {
 	if !c.isCurrent(token) {
 		return
@@ -121,12 +99,8 @@ func (c *deliveryCooldownTracker) recordFailure(token windowToken) {
 		return
 	}
 	if !c.windowEnd.IsZero() {
-		// A probe that fails recoverably still ends the window: clear it so a much later success is
-		// not misreported as the resumption, and close the boundary round (see recordSuccess) so the
-		// probe's concurrently dispatched siblings cannot combine into a reset. The accepted cost is
-		// that a sibling unexpected failure in the same round goes stale with them, deferring the
-		// next window by at most one cadence: the next round's failure opens it, with the ladder
-		// position preserved.
+		// A probe that fails recoverably still ends the window: clear it so a later success is
+		// not misreported as the resumption
 		c.windowEnd = time.Time{}
 		c.epoch++
 	}
@@ -134,10 +108,7 @@ func (c *deliveryCooldownTracker) recordFailure(token windowToken) {
 }
 
 // recordUnexpectedFailure records a delivery failure classified as unexpected, opening a cooldown
-// window. Stale outcomes update nothing: in particular, once one failure of a round has opened a
-// window, its concurrently dispatched siblings cannot lengthen it or step the ladder again for
-// the same incident. The window doubles from cooldownInitialDelay up to cooldownMaxDelay per
-// failed probe. It returns the window length and true when a new window was opened.
+// window.
 func (c *deliveryCooldownTracker) recordUnexpectedFailure(token windowToken) (time.Duration, bool) {
 	if !c.isCurrent(token) {
 		return 0, false
