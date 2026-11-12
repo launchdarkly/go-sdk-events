@@ -518,7 +518,7 @@ func (ed *eventDispatcher) discardPayloadInCooldown(completed chan struct{}, tot
 	if hadContextIntroductions {
 		ed.userKeys.clear()
 	}
-	ed.config.EventMetrics.RecordEventsFailedSend(totalEventCount, EventSendFailureMetadata{})
+	ed.config.EventMetrics.RecordEventsFailedSend(totalEventCount, EventSendFailureMetadata{DiscardedInCooldown: true})
 	remaining := ed.cooldown.remaining().Round(time.Second)
 	if !ed.warnedDiscardThisWindow {
 		ed.warnedDiscardThisWindow = true

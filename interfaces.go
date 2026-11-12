@@ -103,8 +103,15 @@ func (NoOpEventMetrics) RecordPendingEvents(int)                              {}
 // This struct may be extended with additional fields in the future without breaking compatibility.
 type EventSendFailureMetadata struct {
 	// StatusCode is the HTTP status code returned by the events service, or 0 if the failure
-	// occurred before receiving an HTTP response (e.g. network error).
+	// occurred before receiving an HTTP response (e.g. network error). A zero status with
+	// DiscardedInCooldown set means no request was made at all, rather than one failing on the
+	// network.
 	StatusCode int
+
+	// DiscardedInCooldown is true only for batches disposed of by the event-delivery cooldown's
+	// in-window no-op; it is never set on a batch for which a delivery attempt was made.
+	// StatusCode is always 0 in this case.
+	DiscardedInCooldown bool
 }
 
 // EventSenderResult is the return type for EventSender.SendEventData.

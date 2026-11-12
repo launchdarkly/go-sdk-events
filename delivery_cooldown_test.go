@@ -259,10 +259,10 @@ func TestInWindowDiscardRecordsFailedSendMetric(t *testing.T) {
 	ep.waitUntilInactive()
 
 	// The in-window no-op is observably a failed delivery, exactly as if the payload had been sent
-	// and refused: the failed-send metric fires, with a zero status code since no response was
-	// received.
+	// and refused: the failed-send metric fires, with DiscardedInCooldown distinguishing the
+	// discard from a delivery that failed on the network.
 	assert.Equal(t, 2, metrics.failedSendCount)
-	assert.Equal(t, EventSendFailureMetadata{}, metrics.lastFailedSendMeta)
+	assert.Equal(t, EventSendFailureMetadata{DiscardedInCooldown: true}, metrics.lastFailedSendMeta)
 	assert.Equal(t, 0, metrics.lastPendingEvents) // the outbox was drained, not retained
 }
 
