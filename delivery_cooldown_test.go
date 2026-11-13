@@ -628,6 +628,9 @@ func TestRefusedWindowOpeningBatchForgetsItsContexts(t *testing.T) {
 	ep.RecordIdentifyEvent(defaultEventFactory.NewIdentifyEventData(basicContext(), ldvalue.OptionalInt{}))
 	ep.Flush()
 	es.awaitEvent(t)
+	// Two syncs: the first lets the flush worker publish its result, the second lets the main loop
+	// consume it (the loop drains pending results before answering a sync), so the window is open
+	// before the clock is advanced below.
 	ep.waitUntilInactive()
 	ep.waitUntilInactive()
 	es.setResult(EventSenderResult{Success: true})
