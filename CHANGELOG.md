@@ -2,6 +2,13 @@
 
 All notable changes to the project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.9.0](https://github.com/launchdarkly/go-sdk-events/compare/v3.8.1...v3.9.0) (2026-11-13)
+
+
+### Features
+
+* replace permanent event-delivery disable with a bounded cooldown (SDK-3374) ([#68](https://github.com/launchdarkly/go-sdk-events/issues/68)) ([af95923](https://github.com/launchdarkly/go-sdk-events/commit/af95923dcf8f3bb463aebe036c946c7802f02b73))
+
 ## [3.8.1](https://github.com/launchdarkly/go-sdk-events/compare/v3.8.0...v3.8.1) (2026-10-22)
 
 
