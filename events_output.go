@@ -1,6 +1,8 @@
 package ldevents
 
 import (
+	"math"
+
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldtime"
@@ -27,13 +29,19 @@ type eventOutputFormatter struct {
 }
 
 func (ef eventOutputFormatter) makeOutputEvents(events []anyEventOutput, summary eventSummary) ([]byte, int) {
-	n := len(events)
-
 	w := jwriter.NewWriter()
 	arr := w.Array()
 
+	n := 0
 	for _, e := range events {
+		// Drop the event rather than only its metric. A custom event written
+		// without metricValue is a conversion; counting a rejected measurement
+		// that way would still corrupt the experiment.
+		if nonFiniteMetricEvent(e) {
+			continue
+		}
 		ef.writeOutputEvent(&w, e)
+		n++
 	}
 	if summary.hasCounters() {
 		ef.writeSummaryEvent(&w, summary)
@@ -45,6 +53,17 @@ func (ef eventOutputFormatter) makeOutputEvents(events []anyEventOutput, summary
 		return w.Bytes(), n
 	}
 	return nil, 0
+}
+
+// nonFiniteMetricEvent reports a custom event whose metric cannot be encoded
+// as a JSON number. The writer emits NaN, +Inf, and -Inf, and one such token
+// makes the rest of the analytics batch unreadable.
+func nonFiniteMetricEvent(evt anyEventOutput) bool {
+	custom, ok := evt.(CustomEventData)
+	if !ok || !custom.HasMetric {
+		return false
+	}
+	return math.IsNaN(custom.MetricValue) || math.IsInf(custom.MetricValue, 0)
 }
 
 func (ef eventOutputFormatter) writeOutputEvent(w *jwriter.Writer, evt anyEventOutput) {
