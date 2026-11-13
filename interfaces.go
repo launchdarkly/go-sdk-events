@@ -103,19 +103,44 @@ func (NoOpEventMetrics) RecordPendingEvents(int)                              {}
 // This struct may be extended with additional fields in the future without breaking compatibility.
 type EventSendFailureMetadata struct {
 	// StatusCode is the HTTP status code returned by the events service, or 0 if the failure
-	// occurred before receiving an HTTP response (e.g. network error).
+	// occurred before receiving an HTTP response (e.g. network error). A zero status with
+	// DiscardedInCooldown set means no request was made at all, rather than one failing on the
+	// network.
 	StatusCode int
+
+	// DiscardedInCooldown is true only for batches disposed of by the event-delivery cooldown's
+	// in-window no-op; it is never set on a batch for which a delivery attempt was made.
+	// StatusCode is always 0 in this case.
+	DiscardedInCooldown bool
 }
 
 // EventSenderResult is the return type for EventSender.SendEventData.
 type EventSenderResult struct {
 	// Success is true if the event payload was delivered.
 	Success bool
-	// MustShutDown is true if the server returned an error indicating that no further event data should be sent.
-	// This normally means that the SDK key is invalid.
+	// Unexpected is true if delivery failed with an unexpected error: one that indicates the
+	// service is refusing requests from this SDK configuration regardless of payload, such as an
+	// HTTP 401 or 403. This normally means that the SDK key is invalid. An HTTP 413 is not
+	// unexpected, even though the same payload would never succeed on a retry: it rejects only
+	// the oversized payload, and a smaller one may be accepted.
+	Unexpected bool
+	// MustShutDown is true under the same conditions as Unexpected.
+	//
+	// Deprecated: This field is equivalent to Unexpected and is retained for compatibility with
+	// code written before the event processor adopted cooldown behavior. Producers should set
+	// Unexpected, and the senders in this package will keep setting both fields until known
+	// consumers of MustShutDown (such as the Relay Proxy) have migrated to IsUnexpectedFailure.
+	// Consumers should call IsUnexpectedFailure, which accepts either field.
 	MustShutDown bool
 	// TimeFromServer is the last known date/time reported by the server, if available, otherwise zero.
 	TimeFromServer ldtime.UnixMillisecondTime
 	// StatusCode is the HTTP status code from the last response, or 0 if no response was received.
 	StatusCode int
+}
+
+// IsUnexpectedFailure returns true if delivery failed with an unexpected error (see the Unexpected
+// field). It also accepts a result produced by code that predates the Unexpected field and set only
+// the deprecated MustShutDown, so consumers should use this method rather than reading either field.
+func (r EventSenderResult) IsUnexpectedFailure() bool {
+	return r.Unexpected || r.MustShutDown
 }

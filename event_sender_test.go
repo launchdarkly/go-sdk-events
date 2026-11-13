@@ -185,10 +185,10 @@ func TestEventSenderRetriesOnRecoverableError(t *testing.T) {
 	}
 }
 
-func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
+func TestEventSenderFailsOnUnexpectedError(t *testing.T) {
 	errs := []errorInfo{{401}, {403}}
 	for _, errorInfo := range errs {
-		t.Run(fmt.Sprintf("Fails permanently after %s", errorInfo), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Fails without retrying after %s", errorInfo), func(t *testing.T) {
 			handler, requestsCh := httphelpers.RecordingHandler(
 				httphelpers.SequentialHandler(
 					errorInfo.Handler(),                // fails once
@@ -200,7 +200,10 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 			result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 			assert.False(t, result.Success)
-			assert.True(t, result.MustShutDown)
+			assert.True(t, result.Unexpected)
+			// The deprecated field must stay equal to Unexpected until consumers of it migrate.
+			assert.Equal(t, result.Unexpected, result.MustShutDown)
+			assert.True(t, result.IsUnexpectedFailure())
 
 			assert.Equal(t, 1, len(requestsCh))
 			r := <-requestsCh
@@ -210,9 +213,9 @@ func TestEventSenderFailsOnUnrecoverableError(t *testing.T) {
 	}
 }
 
-func TestEventSenderDoesNotShutdownOnLargePayload(t *testing.T) {
+func TestEventSenderDoesNotReportUnexpectedErrorOnLargePayload(t *testing.T) {
 	errorInfo := errorInfo{413}
-	t.Run(fmt.Sprintf("Fails permanently after %s", errorInfo), func(t *testing.T) {
+	t.Run(fmt.Sprintf("Fails without retrying after %s", errorInfo), func(t *testing.T) {
 		handler, _ := httphelpers.RecordingHandler(
 			httphelpers.SequentialHandler(errorInfo.Handler()),
 		)
@@ -221,7 +224,11 @@ func TestEventSenderDoesNotShutdownOnLargePayload(t *testing.T) {
 		result := es.SendEventData(AnalyticsEventDataKind, arbitraryJSONData, 1)
 
 		assert.False(t, result.Success)
-		assert.False(t, result.MustShutDown)
+		assert.False(t, result.Unexpected)
+		// A 413 must never acquire the unexpected classification through either field: that would
+		// put delivery into cooldown over a payload-size problem.
+		assert.Equal(t, result.Unexpected, result.MustShutDown)
+		assert.False(t, result.IsUnexpectedFailure())
 	})
 }
 

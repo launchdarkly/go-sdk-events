@@ -11,7 +11,7 @@ func httpErrorMessage(statusCode int, context string, recoverableMessage string)
 	}
 	resultMessage := recoverableMessage
 	if !isHTTPErrorRecoverable(statusCode) {
-		resultMessage = "giving up permanently"
+		resultMessage = "the payload will not be retried"
 	}
 	return fmt.Sprintf("Received HTTP error %d%s for %s - %s",
 		statusCode, statusDesc, context, resultMessage)

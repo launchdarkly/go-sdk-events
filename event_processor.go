@@ -20,7 +20,7 @@ type anyEventInput interface{}
 type anyEventOutput interface{}
 
 type defaultEventProcessor struct {
-	inboxCh      chan eventDispatcherMessage
+	inboxCh       chan eventDispatcherMessage
 	inboxFullOnce sync.Once
 	closeOnce     sync.Once
 	loggers       ldlog.Loggers
@@ -28,18 +28,19 @@ type defaultEventProcessor struct {
 }
 
 type eventDispatcher struct {
-	config               EventsConfiguration
-	outbox               *eventsOutbox
-	flushCh              chan *flushPayload
-	senderResultCh       chan EventSenderResult
-	workersGroup         *sync.WaitGroup
-	userKeys             lruCache
-	lastKnownPastTime    ldtime.UnixMillisecondTime
-	deduplicatedContexts int
-	eventsInLastBatch    int
-	disabled             bool
-	currentTimestampFn   func() ldtime.UnixMillisecondTime
-	sampler              *ldsampling.RatioSampler
+	config                  EventsConfiguration
+	outbox                  *eventsOutbox
+	flushCh                 chan *flushPayload
+	senderResultCh          chan senderResult
+	workersGroup            *sync.WaitGroup
+	userKeys                lruCache
+	lastKnownPastTime       ldtime.UnixMillisecondTime
+	deduplicatedContexts    int
+	eventsInLastBatch       int
+	cooldown                *deliveryCooldownTracker
+	warnedDiscardThisWindow bool // limits the in-window discard warning to once per cooldown window
+	currentTimestampFn      func() ldtime.UnixMillisecondTime
+	sampler                 *ldsampling.RatioSampler
 }
 
 type flushPayload struct {
@@ -47,6 +48,14 @@ type flushPayload struct {
 	events          []anyEventOutput
 	summary         eventSummary
 	completed       chan struct{}
+	token           windowToken
+}
+
+// senderResult carries a delivery outcome from a flush worker back to the dispatcher, along with
+// the window token the delivery was dispatched under.
+type senderResult struct {
+	result EventSenderResult
+	token  windowToken
 }
 
 // Payload of the inboxCh channel.
@@ -167,9 +176,10 @@ func startEventDispatcher(
 		config:             config,
 		outbox:             newEventsOutbox(config.Capacity, config.Loggers, config.EventMetrics),
 		flushCh:            make(chan *flushPayload, 1),
-		senderResultCh:     make(chan EventSenderResult, maxFlushWorkers),
+		senderResultCh:     make(chan senderResult, maxFlushWorkers),
 		workersGroup:       &sync.WaitGroup{},
 		userKeys:           newLruCache(config.UserKeysCapacity),
+		cooldown:           newDeliveryCooldownTracker(config.timeNowFn),
 		currentTimestampFn: config.currentTimeProvider,
 		sampler:            ldsampling.NewSampler(),
 	}
@@ -237,8 +247,19 @@ func (ed *eventDispatcher) runMainLoop(
 	}
 
 	for {
-		// Drain the response channel with a higher priority than anything else
-		// to ensure that the flush workers don't get blocked.
+		// Drain the sender-result channel with a higher priority than anything else, so that the
+		// delivery cooldown state is current before any later message or flush tick is processed.
+		// (A flush request that was already queued behind a window-opening failure is therefore
+		// processed in-window and discarded.)
+		select {
+		case result, ok := <-ed.senderResultCh:
+			if !ok { // COVERAGE: defensive; the channel is only closed on the shutdown path, which returns
+				return
+			}
+			ed.handleSenderResult(result)
+			continue
+		default:
+		}
 		select {
 		case message := <-inboxCh:
 			switch m := message.(type) {
@@ -263,16 +284,11 @@ func (ed *eventDispatcher) runMainLoop(
 				m.replyCh <- struct{}{}
 				return
 			}
-		case result := <-ed.senderResultCh:
-			switch {
-			case ed.disabled: // COVERAGE: no way to simulate in unit tests
-				continue
-			case result.MustShutDown:
-				ed.disabled = true
-				ed.outbox.clear()
-			case result.TimeFromServer > 0:
-				ed.lastKnownPastTime = result.TimeFromServer
+		case result, ok := <-ed.senderResultCh:
+			if !ok { // COVERAGE: defensive; the channel is only closed on the shutdown path, which returns
+				return
 			}
+			ed.handleSenderResult(result)
 		case <-flushTicker.C:
 			ed.triggerFlush(nil)
 		case <-usersResetTicker.C:
@@ -295,11 +311,36 @@ func (ed *eventDispatcher) runMainLoop(
 	}
 }
 
-func (ed *eventDispatcher) processEvent(evt anyEventInput) {
-	if ed.disabled {
-		return
+// handleSenderResult updates server-time calibration and the delivery cooldown state from the
+// outcome of an analytics payload delivery. (Flush workers do not publish results for diagnostic
+// payloads, so diagnostic deliveries never affect cooldown state.)
+func (ed *eventDispatcher) handleSenderResult(sr senderResult) {
+	result := sr.result
+	if result.TimeFromServer > 0 && !result.IsUnexpectedFailure() {
+		ed.lastKnownPastTime = result.TimeFromServer
 	}
+	switch {
+	case result.IsUnexpectedFailure():
+		if window, opened := ed.cooldown.recordUnexpectedFailure(sr.token); opened {
+			ed.warnedDiscardThisWindow = false
+			// When the cooldown window opens, any index or identify events in the refused batch were
+			// lost with it: forget all context keys so later payloads carry the full contexts again.
+			ed.userKeys.clear()
+			ed.config.Loggers.Errorf(
+				"Event delivery failed with an unexpected error (HTTP status %d);"+
+					" event delivery will not be attempted for the next %s",
+				result.StatusCode, window.Round(time.Second))
+		}
+	case result.Success:
+		if resumed := ed.cooldown.recordSuccess(sr.token); resumed {
+			ed.config.Loggers.Info("Event delivery resumed after cooldown")
+		}
+	default:
+		ed.cooldown.recordFailure(sr.token)
+	}
+}
 
+func (ed *eventDispatcher) processEvent(evt anyEventInput) {
 	var samplingRatio ldvalue.OptionalInt
 
 	// Decide whether to add the event to the payload. Feature events may be added twice, once for
@@ -427,22 +468,21 @@ func (ed *eventDispatcher) shouldDebugEvent(evt *EvaluationData) bool {
 
 // Signal that we would like to do a flush as soon as possible.
 func (ed *eventDispatcher) triggerFlush(completed chan struct{}) {
-	if ed.disabled {
-		if completed != nil {
-			close(completed)
-		}
-		return
-	}
 	// Is there anything to flush?
-	payload := ed.outbox.getPayload(completed)
-	totalEventCount := len(payload.events)
-	if payload.summary.hasCounters() {
+	totalEventCount := len(ed.outbox.events)
+	if ed.outbox.summarizer.snapshot().hasCounters() {
 		totalEventCount++
+	}
+	if ed.cooldown.inCooldown() {
+		ed.discardPayloadInCooldown(completed, totalEventCount)
+		return
 	}
 	if totalEventCount == 0 {
 		ed.eventsInLastBatch = 0
 		return
 	}
+	payload := ed.outbox.getPayload(completed)
+	payload.token = ed.cooldown.beginDelivery()
 	ed.workersGroup.Add(1) // Increment the count of active flushes
 	select {
 	case ed.flushCh <- &payload:
@@ -455,6 +495,41 @@ func (ed *eventDispatcher) triggerFlush(completed chan struct{}) {
 		// We can't start a flush right now because we're waiting for one of the workers
 		// to pick up the last one.  Do not reset the event outbox or summary state.
 		ed.workersGroup.Done()
+	}
+}
+
+func (ed *eventDispatcher) discardPayloadInCooldown(completed chan struct{}, totalEventCount int) {
+	if completed != nil {
+		defer close(completed)
+	}
+	// No batch reached the service, so the diagnostic batch-size stat must not report one.
+	ed.eventsInLastBatch = 0
+	if totalEventCount == 0 {
+		return
+	}
+	hadContextIntroductions := false
+	for _, e := range ed.outbox.events {
+		switch e.(type) {
+		case indexEvent, IdentifyEventData:
+			hadContextIntroductions = true
+		}
+		if hadContextIntroductions {
+			break
+		}
+	}
+	ed.outbox.clear()
+	if hadContextIntroductions {
+		ed.userKeys.clear()
+	}
+	ed.config.EventMetrics.RecordEventsFailedSend(totalEventCount, EventSendFailureMetadata{DiscardedInCooldown: true})
+	remaining := ed.cooldown.remaining().Round(time.Second)
+	if !ed.warnedDiscardThisWindow {
+		ed.warnedDiscardThisWindow = true
+		ed.config.Loggers.Warnf("Discarded %d events: event delivery is cooling down for another %s",
+			totalEventCount, remaining)
+	} else {
+		ed.config.Loggers.Debugf("Discarded %d events: event delivery is cooling down for another %s",
+			totalEventCount, remaining)
 	}
 }
 
@@ -510,7 +585,7 @@ func (ed *eventDispatcher) contextForIndexOrIdentify(eventContext EventInputCont
 }
 
 func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *eventOutputFormatter, flushCh <-chan *flushPayload,
-	workersGroup *sync.WaitGroup, senderResultCh chan<- EventSenderResult) {
+	workersGroup *sync.WaitGroup, senderResultCh chan<- senderResult) {
 	for {
 		payload, more := <-flushCh
 		if !more {
@@ -538,7 +613,7 @@ func runFlushTask(ctx context.Context, config EventsConfiguration, formatter *ev
 				select {
 				case <-ctx.Done():
 				default:
-					senderResultCh <- result
+					senderResultCh <- senderResult{result: result, token: payload.token}
 				}
 			}
 

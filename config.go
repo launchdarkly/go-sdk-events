@@ -61,4 +61,6 @@ type EventsConfiguration struct {
 	forceDiagnosticRecordingInterval time.Duration
 	// Used in testing to override event sampling rules
 	forceSampling bool
+	// Used in testing to instrument the clock used for delivery cooldown timing.
+	timeNowFn func() time.Time
 }

@@ -65,6 +65,14 @@ func (ms *mockEventSender) setGate(gateCh <-chan struct{}, waitingCh chan<- stru
 	ms.lock.Unlock()
 }
 
+// setResult replaces the result returned by subsequent sends, under the same lock that
+// SendEventData reads it with, so tests may call it while deliveries are in flight.
+func (ms *mockEventSender) setResult(result EventSenderResult) {
+	ms.lock.Lock()
+	ms.result = result
+	ms.lock.Unlock()
+}
+
 func (ms *mockEventSender) getPayloadCount() int {
 	ms.lock.Lock()
 	defer ms.lock.Unlock()
