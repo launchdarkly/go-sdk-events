@@ -2,6 +2,7 @@ package ldevents
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
@@ -552,6 +553,88 @@ func TestEventOutputSummaryEvents(t *testing.T) {
 		assert.Nil(t, bytes)
 		assert.Equal(t, 0, count)
 	})
+}
+
+func TestEventOutputNonFiniteMetricDoesNotInvalidateBatch(t *testing.T) {
+	formatter := eventOutputFormatter{
+		contextFormatter: newEventContextFormatter(basicConfigWithoutPrivateAttrs()),
+		config:           basicConfigWithoutPrivateAttrs(),
+	}
+	context := Context(ldcontext.New("user-key"))
+	healthy := withoutReasons.NewCustomEventData("healthy", context, ldvalue.Null(), false, 0, ldvalue.OptionalInt{})
+
+	t.Run("finite metric stays with the rest of the batch", func(t *testing.T) {
+		finite := withoutReasons.NewCustomEventData("finite", context, ldvalue.String("ok"), true, 2.5, ldvalue.OptionalInt{})
+		huge := withoutReasons.NewCustomEventData("huge", context, ldvalue.Null(), true, math.MaxFloat64, ldvalue.OptionalInt{})
+		bytes, count := formatter.makeOutputEvents([]anyEventOutput{healthy, finite, huge}, eventSummary{})
+		require.True(t, json.Valid(bytes))
+		require.Equal(t, 3, count)
+		assertJSONEventKeys(t, bytes, "healthy", "finite", "huge")
+		assert.Contains(t, string(bytes), `"metricValue":2.5`)
+	})
+
+	for _, tc := range []struct {
+		name  string
+		value float64
+	}{
+		{name: "NaN", value: math.NaN()},
+		{name: "positive infinity", value: math.Inf(1)},
+		{name: "negative infinity", value: math.Inf(-1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := withoutReasons.NewCustomEventData("bad-metric", context, ldvalue.String("kept-data"), true, tc.value, ldvalue.OptionalInt{})
+			bytes, count := formatter.makeOutputEvents([]anyEventOutput{healthy, bad}, eventSummary{})
+			require.Truef(t, json.Valid(bytes), "payload must stay valid JSON, got %s", bytes)
+			require.Equal(t, 1, count)
+			assertJSONEventKeys(t, bytes, "healthy")
+			assert.NotContains(t, string(bytes), "bad-metric")
+		})
+	}
+
+	t.Run("batch of only non-finite metric events is empty", func(t *testing.T) {
+		bad := withoutReasons.NewCustomEventData("bad-metric", context, ldvalue.Null(), true, math.NaN(), ldvalue.OptionalInt{})
+		bytes, count := formatter.makeOutputEvents([]anyEventOutput{bad}, eventSummary{})
+		assert.Nil(t, bytes)
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("unused non-finite metric value is not written", func(t *testing.T) {
+		plain := withoutReasons.NewCustomEventData("plain", context, ldvalue.Null(), false, math.NaN(), ldvalue.OptionalInt{})
+		bytes, count := formatter.makeOutputEvents([]anyEventOutput{plain}, eventSummary{})
+		require.True(t, json.Valid(bytes))
+		require.Equal(t, 1, count)
+		assertJSONEventKeys(t, bytes, "plain")
+	})
+
+	t.Run("summary survives a dropped non-finite metric event", func(t *testing.T) {
+		bad := withoutReasons.NewCustomEventData("bad-metric", context, ldvalue.Null(), true, math.Inf(1), ldvalue.OptionalInt{})
+		es := newEventSummarizer()
+		flag := FlagEventProperties{Key: "flag1", Version: 100}
+		es.summarizeEvent(withoutReasons.NewEvaluationData(flag, context,
+			ldreason.NewEvaluationDetail(ldvalue.String("v"), 1, noReason),
+			false, ldvalue.String("dv"), "", ldvalue.OptionalInt{}, false))
+		bytes, count := formatter.makeOutputEvents([]anyEventOutput{bad}, es.snapshot())
+		require.Truef(t, json.Valid(bytes), "payload must stay valid JSON, got %s", bytes)
+		require.Equal(t, 1, count)
+		var parsed []map[string]interface{}
+		require.NoError(t, json.Unmarshal(bytes, &parsed))
+		require.Len(t, parsed, 1)
+		assert.Equal(t, "summary", parsed[0]["kind"])
+		assert.NotContains(t, string(bytes), "bad-metric")
+	})
+}
+
+func assertJSONEventKeys(t *testing.T, bytes []byte, keys ...string) {
+	t.Helper()
+	var parsed []map[string]interface{}
+	require.NoError(t, json.Unmarshal(bytes, &parsed))
+	require.Len(t, parsed, len(keys))
+	for i, key := range keys {
+		if key == "" {
+			continue
+		}
+		assert.Equal(t, key, parsed[i]["key"])
+	}
 }
 
 func verifyEventOutput(t *testing.T, formatter eventOutputFormatter, event anyEventInput, jsonMatcher m.Matcher) {
