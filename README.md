@@ -9,7 +9,7 @@ This repository contains the internal analytics event logic and event data model
 
 ## Supported Go versions
 
-This version of the project requires a Go version of 1.18 or higher.
+While this version of the project requires Go 1.24 or later, you should use the latest patched version of a supported Go release.
 
 ## Learn more
 
