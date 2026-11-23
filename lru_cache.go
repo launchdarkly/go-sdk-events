@@ -2,9 +2,11 @@ package ldevents
 
 import (
 	"container/list"
+	"sync"
 )
 
 type lruCache struct {
+	m        sync.RWMutex
 	values   map[interface{}]*list.Element
 	lruList  *list.List
 	capacity int
@@ -19,6 +21,8 @@ func newLruCache(capacity int) lruCache {
 }
 
 func (c *lruCache) clear() {
+	c.m.Lock()
+	defer c.m.Unlock()
 	c.values = make(map[interface{}]*list.Element)
 	c.lruList.Init()
 }
@@ -29,10 +33,14 @@ func (c *lruCache) add(value interface{}) bool {
 	if c.capacity == 0 {
 		return false
 	}
+	c.m.RLock()
+	defer c.m.RUnlock()
 	if e, ok := c.values[value]; ok {
 		c.lruList.MoveToFront(e)
 		return true
 	}
+	c.m.Lock()
+	defer c.m.Unlock()
 	for len(c.values) >= c.capacity {
 		oldest := c.lruList.Back()
 		delete(c.values, oldest.Value)
